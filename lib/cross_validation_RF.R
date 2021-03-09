@@ -15,8 +15,8 @@ cv.function <- function(features, labels, K, num_tree,mtry, reweight = FALSE){
   ### - reweight: sample reweighting 
   
   set.seed(2020)
-  n <- dim(features)[1]#n=nrow
-  n.fold <- round(n/K, 0)#k=5
+  n <- dim(features)[1]
+  n.fold <- round(n/K, 0)
   s <- sample(n) %% K + 1 
   cv.error <- rep(NA, K)
   cv.AUC <- rep(NA, K)
@@ -44,13 +44,11 @@ cv.function <- function(features, labels, K, num_tree,mtry, reweight = FALSE){
     }
     
     ## make predictions
-    label_test<as.integer(label_test)
-    label_test<-ifelse(label_test==2,0,1)
-    label_pred <- test(model_train, feature_test)$predictions
-    cv.error[i] <- 1- sum(weight_test * (label_pred == label_test)) / sum(weight_test)
-    tpr.fpr <- WeightedROC(label_pred, label_test, weight_test)
+    label_pred <- test(model_train, feature_test)
+    prob_pred <- label_pred$predictions
+    cv.error[i] <- 1 - sum(weight_test*(prob_pred == label_test))/sum(weight_test)
+    tpr.fpr <- WeightedROC(prob_pred,label_test,weight_test)
     cv.AUC[i] <- WeightedAUC(tpr.fpr)
-    
   }
   return(c(mean(cv.error),sd(cv.error), mean(cv.AUC), sd(cv.AUC)))
 }

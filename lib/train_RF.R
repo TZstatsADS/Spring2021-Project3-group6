@@ -3,17 +3,18 @@
 ###########################################################
 
 train <- function(features, labels, num_tree,mtry,w = NULL){
-  labels<-ifelse(labels==2,0,1)
   model <- ranger(labels~.,
-                  data=data.frame(features,labels),
+                  data=data.frame(cbind(features,labels)),
                   num.trees=num_tree,
                   mtry=mtry,
                   case.weights=w,
                   classification=TRUE,
+                  #probability = T,
                   verbose = F,
+                  write.forest = T,
+                  regularization.factor = 1,
                   importance = "none",
-                  min.node.size = 1,
-                  max.depth = 0
+                  min.node.size = 10
                  )
   return(model)
 }

@@ -2,7 +2,7 @@
 ### Make predictions with test features ###
 ###########################################################
 
-test <- function(model, features){
+test <- function(model, features, pred.type){
   res <- predict(model, 
                  data.frame(features))
   return(res)
