@@ -44,10 +44,10 @@ cv.function <- function(features, labels, K, num_tree,mtry, reweight = FALSE){
     }
     
     ## make predictions
-    label_pred <- test(model_train, feature_test)
-    prob_pred <- label_pred$predictions
-    cv.error[i] <- 1 - sum(weight_test*(prob_pred == label_test))/sum(weight_test)
-    tpr.fpr <- WeightedROC(prob_pred,label_test,weight_test)
+    prob_pred <- test(model_train, feature_test)$predictions
+    label_pred <- ifelse(prob_pred[,1]>prob_pred[,2],1,2)
+    cv.error[i] <- 1 - sum(weight_test*(label_pred == label_test))/sum(weight_test)
+    tpr.fpr <- WeightedROC(prob_pred[,2],label_test,weight_test)
     cv.AUC[i] <- WeightedAUC(tpr.fpr)
   }
   return(c(mean(cv.error),sd(cv.error), mean(cv.AUC), sd(cv.AUC)))

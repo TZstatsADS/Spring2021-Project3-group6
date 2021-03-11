@@ -197,8 +197,8 @@ if(run.feature.test){
 }else{
   load(file="../output/feature_test.RData")
 }
-levels(dat_train$label)
-levels(dat_test$label)
+table(dat_train$label)
+table(dat_test$label)
 ```
 
 
@@ -214,10 +214,10 @@ levels(dat_test$label)
   + Input: an R object that contains a trained classifier.
   + Output: training model specification
 
-+ Do Random forest tunning parameter searching using three parameters:
-  + n.tree: number of trees. want enough trees to stablize the error but using too many trees is unnecssraily inefficient
-  + mtry: the number of varaibles to randonly sample as candidates at each split.
-  + nodesize: minimun number of samples within the terminal nodes.Controls the complexity of the trees. Bigger node size allows for deeper, more complex trees and smaller node results in shadow trees. Bias-varaince trade-off because the deeper trees introduce more varaince, and shallower trees introduce more bias. 
++ Do Random forest tuning parameter searching using three parameters:
+  + n.tree: number of trees. want enough trees to stabilize the error but using too many trees is unnecessarily inefficient
+  + mtry: the number of variables to randomly sample as candidates at each split.
+  + nodesize: minimum number of samples within the terminal nodes.Controls the complexity of the trees. Bigger node size allows for deeper, more complex trees and smaller node results in shadow trees. Bias-varaince trade-off because the deeper trees introduce more varaince, and shallower trees introduce more bias. 
 
 
 ```{r loadlib_RF}
@@ -254,6 +254,41 @@ if(run.cv.RF){
 }else{
   load("../output/res_cv_RF.RData")
 }
+# trial<-ranger(label_train~.,
+#        data=data.frame(cbind(label_train,feature_train)),
+#        num.trees=100,
+#        mtry=39,
+#         classification=TRUE,
+#                   probability = T,
+#                   verbose = F,
+#                   write.forest = T,
+#                   regularization.factor = 1,
+#                   importance = "none",
+#                   min.node.size = 10)
+# prob_pred<-predict(trial,feature_test)$predictions
+# label_pred <- ifelse(prob_pred[,1]>=prob_pred[,2],1,2)
+# table(label_pred)
+# nrow(prob_pred)
+# length(label_test)
+# cv.error <- 1 - sum(weight_test*(label_pred == label_test))/sum(weight_test)
+# tpr.fpr <- WeightedROC(prob_pred[,2],label_test,weight_test)
+# cv.AUC <- WeightedAUC(tpr.fpr)
+# 
+# 
+# trial1<-ranger(label_train~.,
+#        data=data.frame(cbind(label_train,feature_train)),
+#        num.trees=100,
+#        mtry=39,
+#         classification=TRUE,
+#                   verbose = F,
+#                   write.forest = T,
+#                   regularization.factor = 1,
+#                   importance = "none",
+#                   min.node.size = 10)
+# ?ranger()
+# labels_pred3<-predict(trial1,feature_test,type="response")$predictions
+# table(labels_pred3)
+
 ```
 
 Visualize cross-validation results. 
@@ -262,8 +297,9 @@ Visualize cross-validation results.
 res_cv_RF <- as.data.frame(res_cv_RF) 
 colnames(res_cv_RF) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
 res_cv_RF <- cbind(hyper_grid_RF,res_cv_RF)
-# hyper_grid_RF[which.max(res_cv_RF$mean_AUC),]
-# hyper_grid_RF[which.min(res_cv_RF$mean_error),]
+res_cv_RF
+hyper_grid_RF[which.max(res_cv_RF$mean_AUC),]
+hyper_grid_RF[which.min(res_cv_RF$mean_error),]
 #heatmaps
 
 ```
@@ -290,14 +326,14 @@ if (run.train.RF) {
     tm_train_RF <- system.time(
       fit_train_RF <- train(features = feature_train, labels = label_train,
                                  w =  weight_train,
-                                 num_tree =par_best_ntree,
-                                 mtry=par_best_mtry))
+                                 num_tree = par_best_ntree,
+                                 mtry = par_best_mtry))
   }else{
     tm_train_RF <- system.time(
       fit_train_RF <- train(features = feature_train, labels = label_train,
                                  w =  NULL, 
-                                num_tree =par_best_ntree,
-                                 mtry=par_best_mtry))
+                                num_tree = par_best_ntree,
+                                 mtry = par_best_mtry))
   }
   save(fit_train_RF, tm_train_RF, file="../output/fit_train_RF.RData")
 }else {
@@ -311,7 +347,8 @@ if (run.train.RF) {
 feature_test <- as.matrix(dat_test[, -6007])
 if(run.test.RF){
   load(file="../output/fit_train_RF.RData")
-  tm_test_RF <- system.time({ label_pred <- test(fit_train_RF, feature_test)$predictions})
+  tm_test_RF <- system.time({ prob_pred <- test(fit_train_RF, feature_test)$predictions
+                              label_pred <- ifelse(prob_pred[,1]>prob_pred[,2],1,2)})
 }
 ```
 
@@ -324,9 +361,10 @@ weight_test <- rep(NA, length(label_test))
 for (v in unique(label_test)){
  weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
 }
+table(label_test)
+table(label_pred)
 accu <- sum(weight_test * (label_pred == label_test)) / sum(weight_test)
- label_pred<-as.numeric(label_pred)
-tpr.fpr <- WeightedROC(label_pred, label_test, weight_test)
+tpr.fpr <- WeightedROC(prob_pred[,2], label_test, weight_test)
  auc <- WeightedAUC(tpr.fpr)
  cat("The accuracy of RF model:", "ntree=", par_best_ntree ,", mtry=", par_best_mtry, "is", accu*100, "%.\n")
  cat("The AUC of RF model:", "ntree=", par_best_ntree ,", mtry=", par_best_mtry, "is", auc, ".\n")
