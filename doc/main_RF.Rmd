@@ -113,9 +113,9 @@ run.feature.train <- FALSE # process features for training set
 run.feature.test <- FALSE # process features for test set
 sample.reweight <- TRUE # run sample reweighting in model training
 
-run.cv.RF<-TRUE #run cross-validation on the training set applying GBM mod
-run.train.RF<-TRUE 
-run.test.RF<-TRUE
+run.cv.RF<-FALSE #run cross-validation on the training set applying GBM mod
+run.train.RF<-FALSE 
+run.test.RF<-FALSE
 ```
 
 Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications. 
@@ -292,22 +292,30 @@ if(run.cv.RF){
 ```
 
 Visualize cross-validation results. 
-```{r cv_vis_RF}
+```{r cv_vis_RF,out.width = "65%",fig.align = 'center',echo=FALSE}
   #increasing the number of mtry improve the performance 
 res_cv_RF <- as.data.frame(res_cv_RF) 
 colnames(res_cv_RF) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
-res_cv_RF <- cbind(hyper_grid_RF,res_cv_RF)
-res_cv_RF
-hyper_grid_RF[which.max(res_cv_RF$mean_AUC),]
-hyper_grid_RF[which.min(res_cv_RF$mean_error),]
-#heatmaps
+result_cv_RF <- cbind(hyper_grid_RF,res_cv_RF)
+#res_cv_RF
+#hyper_grid_RF[which.max(res_cv_RF$mean_AUC),]
+#hyper_grid_RF[which.min(res_cv_RF$mean_error),]
+##heatmaps
+p1=ggplot(result_cv_RF)+
+  geom_tile(aes(x=ntree,y=mtry,fill=mean_AUC))+
+  labs(title="mean_AUC heatmap for Random Forest Model",x="ntree",y="mtry")
+  
+  
+p2=ggplot(result_cv_RF)+
+  geom_tile(aes(x=ntree,y=mtry,fill=mean_error))+
+  labs(title="mean_error heatmaps for Random Forest Model", x="ntree",y="mtry")
 
+grid.arrange(p1,p2,nrow=2)
 ```
-
 
 * Choose the "best" parameter value
 ```{r best_model_RF}
-par_best_RF <-hyper_grid_RF[which.max(res_cv_RF$mean_AUC),]
+par_best_RF <-hyper_grid_RF[which.max(result_cv_RF$mean_AUC),]
 par_best_ntree<- par_best_RF$ntree
 par_best_mtry<- par_best_RF$mtry
 ```

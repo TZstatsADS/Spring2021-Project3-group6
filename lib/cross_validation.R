@@ -44,6 +44,7 @@ cv.function <- function(features, labels, K, l, reweight = FALSE){
     }
     
     ## make predictions
+    label_test<-ifelse(label_test==2,0,1)
     label_pred <- as.integer(test(model_train, feature_test, pred.type = 'class'))
     prob_pred <- test(model_train, feature_test, pred.type = 'response')
     cv.error[i] <- 1 - sum(weight_test * (label_pred == label_test)) / sum(weight_test)
