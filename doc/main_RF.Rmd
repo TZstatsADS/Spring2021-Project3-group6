@@ -1,6 +1,6 @@
 ---
-title: "Main"
-author: "Chengliang Tang, Yujie Wang, Diane Lu, Tian Zheng"
+title: "Main-Random Forest Model for imbalanced binary classification"
+author: "Weiwei Song"
 output:
   pdf_document: default
   html_notebook: default
@@ -76,6 +76,8 @@ library(randomForest)
 library(ranger)
 library(ROSE)
 library(rpart)
+library(ROCR)
+library(pROC)
 ```
 
 ### Step 0 set work directories
@@ -91,7 +93,7 @@ Provide directories for training images. Training images and Training fiducial p
 train_dir <- "../data/train_set/" # This will be modified for different data sets.
 train_image_dir <- paste(train_dir, "images/", sep="")
 train_pt_dir <- paste(train_dir,  "points/", sep="")
-train_label_path <- paste(train_dir, "label.csv", sep="") 
+train_label_path <- paste(train_dir, "label.csv", sep="")
 ```
 
 ### Step 1: set up controls for evaluation experiments.
@@ -108,14 +110,19 @@ In this chunk, we have a set of controls for the evaluation experiments.
 ```{r exp_setup}
 K <- 5  # number of CV folds
 
-run.fudicial.list <- FALSE
-run.feature.train <- FALSE # process features for training set
-run.feature.test <- FALSE # process features for test set
+run.fudicial.list <- TRUE
+
+run.feature.train <- TRUE # process features for training set
+run.feature.test <- TRUE # process features for test set
 sample.reweight <- TRUE # run sample reweighting in model training
 
-run.cv.RF<-FALSE #run cross-validation on the training set applying GBM mod
-run.train.RF<-FALSE 
-run.test.RF<-FALSE
+run.cv.WRF<-FALSE 
+run.train.WRF<-FALSE 
+run.test.WRF<-FALSE
+
+run.cv.BRF<-FALSE
+run.train.BRF<-FALSE
+run.test.BRF<-FALSE
 ```
 
 Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications. 
@@ -125,7 +132,6 @@ Using cross-validation or independent test set evaluation, we compare the perfor
 hyper_grid_RF<- expand.grid(
  ntree=seq(100,300,by=50),
  mtry=seq(39,234,by=39)# start from 1/2sqrt(q) to 3sqrt(q)
-
 )
 dim(hyper_grid_RF)
 ```
@@ -150,6 +156,7 @@ for(i in 1:100){
 }
 ```
 
+
 Fiducial points are stored in matlab format. In this step, we read them and store them in a list.
 ```{r read fiducial points}
 #function to read fiducial points
@@ -163,6 +170,7 @@ readMat.matrix <- function(index){
 fiducial_pt_list <- lapply(1:n_files, readMat.matrix)
 save(fiducial_pt_list, file="../output/fiducial_pt_list.RData")
 ```
+
 
 ### Step 3: construct features and responses
 
@@ -197,8 +205,7 @@ if(run.feature.test){
 }else{
   load(file="../output/feature_test.RData")
 }
-table(dat_train$label)
-table(dat_test$label)
+
 ```
 
 
@@ -220,39 +227,122 @@ table(dat_test$label)
   + nodesize: minimum number of samples within the terminal nodes.Controls the complexity of the trees. Bigger node size allows for deeper, more complex trees and smaller node results in shadow trees. Bias-varaince trade-off because the deeper trees introduce more varaince, and shallower trees introduce more bias. 
 
 
-```{r loadlib_RF}
-source("../lib/train_RF.R") 
-source("../lib/test_RF.R")
-source("../lib/cross_validation_RF.R")
+```{r loadlib_BRF}
+source("../lib/train_BRF.R") 
+source("../lib/test_BRF.R")
+source("../lib/cross_validation_BRF.R")
 ```
 
-#### Model selection with cross-validation
-* Do model selection by choosing among different values of training model parameters.
-
-```{r runcv_RF}
+###Balanced Random Forest 
+```{r runcv_BRF}
 feature_train = as.matrix(dat_train[, -6007])
 label_train = as.integer(dat_train$label) 
-#try to find the best mtry
- # tuneRF(x=feature_train,
- #        y=as.factor(label_train),
- #        ntreeTry=500,
- #      mtryStart=204,
- #      stepFactor = 1.5,
- #         improve=0.01)
-if(run.cv.RF){
-  res_cv_RF <- matrix(0, nrow = nrow(hyper_grid_RF), ncol = 4)
+if(run.cv.BRF){
+  res_cv_BRF <- matrix(0, nrow = nrow(hyper_grid_RF), ncol = 4)
   for(i in 1:nrow(hyper_grid_RF)){
     cat("n_tree =", hyper_grid_RF$ntree[i],
         ", mtry=", hyper_grid_RF$mtry[i],"\n")
-    res_cv_RF[i,] <- cv.function(features = feature_train, 
+    res_cv_BRF[i,] <- cv.function(features = feature_train, 
+                              labels = label_train, K, 
+                              num_tree=hyper_grid_RF$ntree[i],
+                              mtry=hyper_grid_RF$mtry[i])
+  save(res_cv_BRF, file="../output/res_cv_BRF.RData")
+  }
+}else{
+  load("../output/res_cv_BRF.RData")
+}
+```
+```{r cv_vis_BRF,out.width = "65%",fig.align = 'center',echo=FALSE}
+
+res_cv_BRF <- as.data.frame(res_cv_BRF) 
+colnames(res_cv_BRF) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
+result_cv_BRF <- cbind(hyper_grid_RF,res_cv_BRF)
+p1=ggplot(result_cv_BRF)+
+  geom_tile(aes(x=ntree,y=mtry,fill=mean_AUC))+
+  labs(title="mean_AUC heatmap for Balanced Random Forest Model",x="ntree",y="mtry")
+  
+  
+p2=ggplot(result_cv_BRF)+
+  geom_tile(aes(x=ntree,y=mtry,fill=mean_error))+
+  labs(title="mean_error heatmaps for Balanced Random Forest Model", x="ntree",y="mtry")
+
+grid.arrange(p1,p2,nrow=2)
+```
+
+* Choose the "best" parameter value
+```{r best_model_BRF}
+par_best_BRF <-hyper_grid_RF[which.max(result_cv_BRF$mean_AUC),]
+par_best_ntree<- par_best_BRF$ntree
+par_best_mtry<- par_best_BRF$mtry
+```
+
+```{r}
+
+if (run.train.BRF) {
+    tm_train_BRF <- system.time({
+      dat_train.ROSE<- ROSE(label~.,data=dat_train)$data
+      feature_train<-dat_train.ROSE[,-6007]
+      label_train<- dat_train.ROSE[,6007]
+      fit_train_BRF <- train(features = feature_train, labels = label_train,
+                                 num_tree = par_best_ntree,
+                                 mtry = par_best_mtry)})
+
+  save(fit_train_BRF, tm_train_BRF, file="../output/fit_train_BRF.RData")
+}else {
+  load(file="../output/fit_train_BRF.RData")
+}
+```
+
+```{r}
+tm_test_BRF = NA
+feature_test <- as.matrix(dat_test[, -6007])
+if(run.test.BRF){
+  load(file="../output/fit_train_BRF.RData")
+  tm_test_BRF <- system.time({ prob_pred <- test(fit_train_BRF, feature_test)$predictions
+                              label_pred <- ifelse(prob_pred[,1]>prob_pred[,2],1,2)})
+}
+```
+
+```{r}
+label_test <- as.integer(dat_test$label)
+weight_test<-rep(1, length(label_test))
+accu <- sum(label_pred == label_test)/length(label_test)
+weight_test<-rep(1,length(label_test))
+ tpr.fpr <- WeightedROC(prob_pred[,2],label_test,weight_test)
+auc <- WeightedAUC(tpr.fpr)
+cat("The accuracy of BRF model:", "ntree=", par_best_ntree ,", mtry=", par_best_mtry, "is", accu*100, "%.\n")
+cat("The AUC of BRF model:", "ntree=", par_best_ntree ,", mtry=", par_best_mtry, "is", auc, ".\n")
+```
+```{r}
+cat("Time for training Balanced Random Forest model=", tm_train_BRF[1], "s \n") 
+cat("Time for testing Balanced Random Forest model=", tm_test_BRF[1], "s \n")
+```
+```{r loadlib_WRF}
+source("../lib/train_WRF.R") 
+source("../lib/test_WRF.R")
+source("../lib/cross_validation_WRF.R")
+```
+#### Model selection with cross-validation
+* Do model selection by choosing among different values of training model parameters.
+
+```{r runcv_WRF}
+feature_train = as.matrix(dat_train[, -6007])
+label_train = as.integer(dat_train$label) 
+
+if(run.cv.WRF){
+  res_cv_WRF <- matrix(0, nrow = nrow(hyper_grid_RF), ncol = 4)
+  for(i in 1:nrow(hyper_grid_RF)){
+    cat("n_tree =", hyper_grid_RF$ntree[i],
+        ", mtry=", hyper_grid_RF$mtry[i],"\n")
+    res_cv_WRF[i,] <- cv.function(features = feature_train, 
                               labels = label_train, K, 
                               num_tree=hyper_grid_RF$ntree[i],
                               mtry=hyper_grid_RF$mtry[i],
                               reweight = sample.reweight)
-  save(res_cv_RF, file="../output/res_cv_RF.RData")
+  save(res_cv_WRF, file="../output/res_cv_WRF.RData")
   }
 }else{
-  load("../output/res_cv_RF.RData")
+  load("../output/res_cv_WRF.RData")
 }
 # trial<-ranger(label_train~.,
 #        data=data.frame(cbind(label_train,feature_train)),
@@ -292,38 +382,39 @@ if(run.cv.RF){
 ```
 
 Visualize cross-validation results. 
-```{r cv_vis_RF,out.width = "65%",fig.align = 'center',echo=FALSE}
+```{r cv_vis_WRF,out.width = "65%",fig.align = 'center',echo=FALSE}
   #increasing the number of mtry improve the performance 
-res_cv_RF <- as.data.frame(res_cv_RF) 
-colnames(res_cv_RF) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
-result_cv_RF <- cbind(hyper_grid_RF,res_cv_RF)
+res_cv_WRF <- as.data.frame(res_cv_WRF) 
+colnames(res_cv_WRF) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
+result_cv_WRF <- cbind(hyper_grid_RF,res_cv_WRF)
 #res_cv_RF
 #hyper_grid_RF[which.max(res_cv_RF$mean_AUC),]
 #hyper_grid_RF[which.min(res_cv_RF$mean_error),]
 ##heatmaps
-p1=ggplot(result_cv_RF)+
+p1=ggplot(result_cv_WRF)+
   geom_tile(aes(x=ntree,y=mtry,fill=mean_AUC))+
   labs(title="mean_AUC heatmap for Random Forest Model",x="ntree",y="mtry")
   
   
-p2=ggplot(result_cv_RF)+
+p2=ggplot(result_cv_WRF)+
   geom_tile(aes(x=ntree,y=mtry,fill=mean_error))+
   labs(title="mean_error heatmaps for Random Forest Model", x="ntree",y="mtry")
 
 grid.arrange(p1,p2,nrow=2)
+
 ```
 
 * Choose the "best" parameter value
-```{r best_model_RF}
-par_best_RF <-hyper_grid_RF[which.max(result_cv_RF$mean_AUC),]
+```{r best_model_WRF}
+par_best_WRF <-hyper_grid_RF[which.max(result_cv_RF$mean_AUC),]
 par_best_ntree<- par_best_RF$ntree
 par_best_mtry<- par_best_RF$mtry
 ```
 
 * Train the model with the entire training set using the selected model (model parameter) via cross-validation.
-```{r final_train_RF}
+```{r final_train_WRF}
 #training weights
-if (run.train.RF) {
+if (run.train.WRF) {
   weight_train <- rep(NA, length(label_train))
   for (v in unique(label_train)){
     weight_train[label_train == v] = 
@@ -331,31 +422,31 @@ if (run.train.RF) {
   }
 
   if (sample.reweight){
-    tm_train_RF <- system.time(
-      fit_train_RF <- train(features = feature_train, labels = label_train,
+    tm_train_WRF <- system.time(
+      fit_train_WRF <- train(features = feature_train, labels = label_train,
                                  w =  weight_train,
                                  num_tree = par_best_ntree,
                                  mtry = par_best_mtry))
   }else{
-    tm_train_RF <- system.time(
-      fit_train_RF <- train(features = feature_train, labels = label_train,
+    tm_train_WRF <- system.time(
+      fit_train_WRF <- train(features = feature_train, labels = label_train,
                                  w =  NULL, 
                                 num_tree = par_best_ntree,
                                  mtry = par_best_mtry))
   }
-  save(fit_train_RF, tm_train_RF, file="../output/fit_train_RF.RData")
+  save(fit_train_WRF, tm_train_WRF, file="../output/fit_train_WRF.RData")
 }else {
-  load(file="../output/fit_train_RF.RData")
+  load(file="../output/fit_train_WRF.RData")
 }
 ```
 
 ### Step 5: Run test on test images
-```{r test}
- tm_test_RF = NA
+```{r test_WRF}
+ tm_test_WRF = NA
 feature_test <- as.matrix(dat_test[, -6007])
-if(run.test.RF){
-  load(file="../output/fit_train_RF.RData")
-  tm_test_RF <- system.time({ prob_pred <- test(fit_train_RF, feature_test)$predictions
+if(run.test.WRF){
+  load(file="../output/fit_train_WRF.RData")
+  tm_test_WRF <- system.time({ prob_pred <- test(fit_train_WRF, feature_test)$predictions
                               label_pred <- ifelse(prob_pred[,1]>prob_pred[,2],1,2)})
 }
 ```
@@ -369,20 +460,18 @@ weight_test <- rep(NA, length(label_test))
 for (v in unique(label_test)){
  weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
 }
-table(label_test)
-table(label_pred)
 accu <- sum(weight_test * (label_pred == label_test)) / sum(weight_test)
 tpr.fpr <- WeightedROC(prob_pred[,2], label_test, weight_test)
  auc <- WeightedAUC(tpr.fpr)
- cat("The accuracy of RF model:", "ntree=", par_best_ntree ,", mtry=", par_best_mtry, "is", accu*100, "%.\n")
- cat("The AUC of RF model:", "ntree=", par_best_ntree ,", mtry=", par_best_mtry, "is", auc, ".\n")
+ cat("The accuracy of WRF model:", "ntree=", par_best_ntree ,", mtry=", par_best_mtry, "is", accu*100, "%.\n")
+ cat("The AUC of WRF model:", "ntree=", par_best_ntree ,", mtry=", par_best_mtry, "is", auc, ".\n")
 ```
 
 ### Summarize Running Time
 Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
-```{r running_time_RF}
-cat("Time for training RF model=", tm_train_RF[1], "s \n") 
-cat("Time for testing RF model=", tm_test_RF[1], "s \n")
+```{r running_time_WRF}
+cat("Time for training Weighed Random Forest model=", tm_train_WRF[1], "s \n") 
+cat("Time for testing Weighted Random Forest model=", tm_test_WRF[1], "s \n")
 ```
 
 ###Reference
