@@ -325,14 +325,15 @@ hyper_grid_XGB_2<- expand.grid(max_depth=c(8,9,10),
                                )
 parallelStartSocket(cpus = detectCores())
 dim(hyper_grid_XGB_2)
+
 run.cv.XGS2=TRUE
 if(run.cv.XGS2){
   res_cv_XGS2 <- matrix(0, nrow = nrow(hyper_grid_XGB_2), ncol = 4)
   for(i in 1:nrow(hyper_grid_XGB_2)){
-    l<-list(max_depth=hyper_grid_XGB_1$max_depth[i],
-            min_child_weight=hyper_grid_XGB_1$min_child_weight[i],
-            subsample=hyper_grid_XGB_1$subsample[i],
-            colsample_bytree=hyper_grid_XGB_1$colsample_bytree[i])
+    l<-list(max_depth=hyper_grid_XGB_2$max_depth[i],
+            min_child_weight=hyper_grid_XGB_2$min_child_weight[i],
+            subsample=hyper_grid_XGB_2$subsample[i],
+            colsample_bytree=hyper_grid_XGB_2$colsample_bytree[i])
     xgbcv<-xgb.cv( params = l,
           data = dtrain, 
           nrounds = 160, 
@@ -362,117 +363,33 @@ if(run.cv.XGS2){
   load("../output/res_cv_XGS2.RData")
 }
 
+colnames(res_cv_XGS2)<-c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
+result2<-cbind(hyper_grid_XGB_2[,1:2],res_cv_XGS2)
 ```
 
+
+
 ```{r step2 }
-#tune subsample and colsample
-hyper_grid_XGB_2<- expand.grid(max_depth=par_best_depth,
-                              min_child_weight=par_best_child,
-                              subsample=c(0.6,0.7,0.8,0.9), 
-                              colsample_bytree=c(0.6,0.7,0.8,0.9)
-                               )
-parallelStartSocket(cpus = detectCores())
-dim(hyper_grid_XGB_2)
-feature_train = as.matrix(dat_train[, -6007])
-label_train = as.integer(dat_train$label) 
-run.cv.XGS2=TRUE
-if(run.cv.XGS2){
-  res_cv_XGS2 <- matrix(0, nrow = nrow(hyper_grid_XGB_2), ncol = 4)
-  for(i in 1:nrow(hyper_grid_XGB_2)){
-    cat("subsample=",hyper_grid_XGB_2$subsample[i],
-        "colsample=",hyper_grid_XGB_2$colsample[i],"\n")
-    l<-list(max_depth=hyper_grid_XGB_2$max_depth[i],
-            min_child_weight=hyper_grid_XGB_2$min_child_weight[i],
-            subsample=hyper_grid_XGB_2$subsample[i],
-            colsample_bytree=hyper_grid_XGB_2$colsample_bytree[i])
-    xgbcv<-xgb.cv( params = l,
-          data = dtrain, 
-          nrounds = 160, 
-          nfold = K, 
-          gamma=0,
-          showsd = T, 
-          stratified = T, 
-          early_stop_round = 20, 
-          eval_metric="auc",
-          eval_metric="error",
-          booster = "gbtree",
-          objective = "binary:logistic", 
-          scale_pos_weight=sumwneg/sumwpos,
-          eta=0.3
-          )
-    result<-xgbcv$evaluation_log
-    cv.error<-result$test_error_mean
-    cv.AUC<-result$test_auc_mean
-    res_cv_XGS2[i,1]<-mean(cv.error)
-    res_cv_XGS2[i,2]<-sd(cv.error)
-    res_cv_XGS2[i,3]<-mean(cv.AUC)
-    res_cv_XGS2[i,4]<-sd(cv.AUC)
-  save(res_cv_XGS2, file="../output/res_cv_XGS2.RData")
-  }
-}else{
-  load("../output/res_cv_XGS2.RData")
-}
-#do some visualization 
-# use the output, pick the best subsample, and colsample_bytree
+#tune subsample and colsample (mostly between 0.6-0.9)
+
+
+# use the output, pick the best subsample, and colsample_bytree, if it is out of the boundary, so some extra work 
 #par_best_subsample<-
 #par_best_colsmaple<-
 ```
 
+
+
 ```{r step 3}
-#tune the regularization parameters using alpha or gamma
-hyper_grid_XGB_3<- expand.grid(max_depth=par_best_depth,
-                              min_child_weight=par_best_child,
-                              subsample=par_best_subsample, 
-                              colsample_bytree=par_best_colsmaple,
-                              #alpha= or try gamma
-                               )
-parallelStartSocket(cpus = detectCores())
-dim(hyper_grid_XGB_3#)
-feature_train = as.matrix(dat_train[, -6007])
-label_train = as.integer(dat_train$label) 
-run.cv.XGS3=TRUE
-if(run.cv.XGS3){
-  res_cv_XGS3 <- matrix(0, nrow = nrow(hyper_grid_XGB_3), ncol = 4)
-  for(i in 1:nrow(hyper_grid_XGB_3)){
-    #cat()
-    l<-list(max_depth=hyper_grid_XGB_3$max_depth[i],
-            min_child_weight=hyper_grid_XGB_3$min_child_weight[i],
-            subsample=hyper_grid_XGB_3$subsample[i],
-            colsample_bytree=hyper_grid_XGB_3$colsample_bytree[i],
-            #alpha= hyper_grid_XGB_3$alpha[i])
-    xgbcv<-xgb.cv( params = l,
-          data = dtrain, 
-          nrounds = 160, 
-          nfold = K, 
-          gamma=0,
-          showsd = T, 
-          stratified = T, 
-          early_stop_round = 20, 
-          eval_metric="auc",
-          eval_metric="error",
-          booster = "gbtree",
-          objective = "binary:logistic", 
-          scale_pos_weight=sumwneg/sumwpos,
-          eta=0.3
-          )
-    result<-xgbcv$evaluation_log
-    cv.error<-result$test_error_mean
-    cv.AUC<-result$test_auc_mean
-    res_cv_XGS3[i,1]<-mean(cv.error)
-    res_cv_XGS3[i,2]<-sd(cv.error)
-    res_cv_XGS3[i,3]<-mean(cv.AUC)
-    res_cv_XGS3[i,4]<-sd(cv.AUC)
-  save(res_cv_XGS3, file="../output/res_cv_XGS3.RData")
-  }
-}else{
-  load("../output/res_cv_XGS3.RData")
-}
+#tune gamma
+
 #do some viusalization, pick the best one 
 ```
 
 ```{r step 4}
-#tune the learning rate, decrease it 
 
+#tune the learning rate, decrease it 
+#if still not performs well, do the regularization parameter tunning
 ```
 
 
