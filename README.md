@@ -4,15 +4,17 @@
 
 ### [Full Project Description](doc/project3_desc.md)
 
+In this project, we will carry out model evaluation and selection for predictive analytics on image data. As data scientists, we often need to evaluate different modeling/analysis strategies and decide what is the best. Such decisions need to be supported by sound evidence in the form of model assessment, validation and comparison. In addition, we also need to communicate our decision and supporting evidence clearly and convincingly in an accessible fashion.
+
 Term: Spring 2021
 
-+ Team ##
++ Team 6
 + Team members
-	+ team member 1
-	+ team member 2
-	+ team member 3
-	+ team member 4
-	+ team member 5
+	+ Wei Wei Song
+	+ Changhao He
+	+ Aurore Gosmant
+	+ Zi Fang
+	+ Jimmy Smiley
 
 + Project summary: In this project, we created a classification engine for facial emotion recognition. 
 	
