@@ -652,7 +652,7 @@ Please orgranize this a little bit
 #run 5 folder cv on the best parameter setting SMOTE 
 source("../lib/cross_validation_XGS.R")
 source("../lib/train_XGS.R")
-run.cv.XGB_S<- FALSE 
+run.cv.XGB_S<- TRUE 
 if(run.cv.XGB_S){
   result<-cv.function(
     data=dat_train,
