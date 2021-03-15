@@ -593,7 +593,7 @@ label_train = as.integer(dat_train$label)-1
 dtrain<-xgb.DMatrix(feature_train,label=label_train)
 sumwpos<-sum(label_train==1)
 sumwneg<-sum(label_train==0)
-train.XGB_W<-TRUE
+train.XGB_W<-FALSE
 if(train.XGB_W){
 tm_train_XGB_W <- system.time(
    fit_train_XGB_W <- xgb.train(params=best_params,
@@ -612,7 +612,7 @@ save(fit_train_XGB_W, file="../output/fit_train_XGB_W.RData")}else{
 ```{r test_XGB_W}
 tm_test = NA
 feature_test <- as.matrix(dat_test[, -6007])
-test.XGB_W<-TRUE
+test.XGB_W<-FALSE
 if(test.XGB_W){
   load(file="../output/fit_train_XGB_W.RData")
   tm_test.XGB_W <- system.time({prob_pred <- predict(fit_train_XGB_W, feature_test);
@@ -649,6 +649,20 @@ cat("Time for testing Weighted xgboost=", tm_test.XGB_W[1], "s \n")
 
 Please orgranize this a little bit 
 ```{r train XGB_S}
+#run 5 folder cv on the best parameter setting SMOTE 
+source("../lib/cross_validation_XGS.R")
+source("../lib/train_XGS.R")
+run.cv.XGB_S<- FALSE 
+if(run.cv.XGB_S){
+  result<-cv.function(
+    data=dat_train,
+            K=5, 
+            l=best_params,
+            p=0.5) #p: the classification threshold
+  save(res_cv_XGB_S, file="../output/res_cv_XGB_S.RData")
+}else{
+  load(file="../output/res_cv_XGB_S.RData")
+}
 #preparing 
 parallelStartSocket(cpus = detectCores())
 #SMOTE the training set
