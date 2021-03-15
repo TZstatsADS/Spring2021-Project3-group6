@@ -213,18 +213,24 @@ sumwneg<-sum(label_train==0)
 dtrain<-xgb.DMatrix(feature_train,label=label_train)
 run.cv_XGS.Step1<-FALSE
 if(run.cv_XGS.Step1){
-params <- list(booster = "gbtree", objective = "binary:logistic", eta=0.3, gamma=0, max_depth=5, min_child_weight=1, subsample=0.8, colsample_bytree=0.8,scale_pos_weight=sumwneg/sumwpos)
-xgbcv <- xgb.cv( params = params, data = dtrain, nrounds = 200, nfold = 5, showsd = T, stratified = T, print_every_n = 10, early_stop_round = 20, maximize = F,eval_metric="auc",eval_metric="error")
- result<-xgbcv$evaluation_logt
- save(result, file="../output/res_cv_XGS.Step1.RData")
+params <- list(booster = "gbtree", objective = "binary:logistic", eta=0.1, gamma=0, max_depth=5, min_child_weight=1, subsample=0.8, colsample_bytree=0.8,scale_pos_weight=sumwneg/sumwpos)
+xgbcv <- xgb.cv( params = params, data = dtrain, nrounds = 100, nfold = 5, showsd = T, stratified = T, print_every_n = 1, early_stop_round = 20, maximize = F,eval_metric="auc",eval_metric="error")
+result<-xgbcv$evaluation_log
+which.min(xgbcv$evaluation_log$test_error_mean)#iter=90
+which.max(xgbcv$evaluation_log$test_auc_mean)#iter=99
+#start from
+ save(xgbcv, file="../output/res_cv_XGS.Step1.RData")
 }else{
   load("../output/res_cv_XGS.Step1.RData")}
 
 result_table<-rbind(result[which.min(result$test_error_mean),c("iter","test_error_mean","test_error_std","test_auc_mean","test_auc_std")],
 result[which.max(result$test_auc_mean),c("iter","test_error_mean","test_error_std","test_auc_mean","test_auc_std")])
-
-#best iter 160/199
-
+library(ggplot2)
+#best iter 
+ggplot(data=xgbcv$evaluation_log[1:200,])+
+  geom_line(aes(x=iter,y=test_error_mean),col="blue")+
+  geom_line(aes(x=iter,y=train_error_mean),col="red")
+  
 #preprocessing the matrix for the test 
 feature_test<-as.matrix(dat_test[,-6007])
 label_test<- as.integer(dat_test$label)-1
@@ -232,15 +238,14 @@ dtest<-xgb.DMatrix(feature_test,label=label_test)
 
 
 #first model trainig using
-run.default.model=FALSE 
+run.default.model=TRUE 
 if(run.default.model){
 xgb1<-xgb.train(params=params,
                 data=dtrain,
-                nrounds=160,
+                nrounds=100,
                 watchlist=list(val=dtest,train=dtrain),
                 print_every_n=10,
                 early_stop_round=10,
-                eval_metric="error",
                 eval_metric="auc")
 
 #model prediction
@@ -253,7 +258,7 @@ confM<-confusionMatrix(factor(xgbpred.label),factor(label_test))
 #accuracy 0.8433 
 #balanced accuracy 0.6886
 auc<-roc(factor(label_test),xgbpred.prob)$auc
-#auc:0.8489(high) not weighted 
+#auc:0.8489(high)
 #  view variable importance plot 
 mat<- xgb.importance(feature_names=colnames(feature_train),model=xgb1)
 xgb.plot.importance(importance_matrix = mat[1:20])
@@ -268,7 +273,7 @@ save(confM,auc,mat,file="../output/res_cv_XGS.toy.RData")
 ```{r XGBtune_Step2}
 #try to find the max depth and min child weight 
 #source("../lib/cross_validation_XGS.R")
-hyper_grid_XGB_1<- expand.grid(max_depth=seq(3,10,by=2),
+hyper_grid_XGB_1<- expand.grid(max_depth=seq(1,6,by=1),
                               min_child_weight=seq(1,6,by=2),
                               subsample=0.8, 
                               colsample_bytree=0.8
@@ -652,8 +657,10 @@ Please orgranize this a little bit
 #run 5 folder cv on the best parameter setting SMOTE 
 source("../lib/cross_validation_XGS.R")
 source("../lib/train_XGS.R")
-run.cv.XGB_S<- TRUE 
+run.cv.XGB_S<- TRUE
+####
 if(run.cv.XGB_S){
+  res_cv_XGB_S<-matrix(0, nrow = 1, ncol = 4)
   res_cv_XGB_S<-cv.function(
     data=dat_train,
             K=5, 
@@ -664,7 +671,7 @@ if(run.cv.XGB_S){
 }else{
   load(file="../output/res_cv_XGB_S.RData")
 }
-res_cv_XGB_S<-result
+
 #preparing 
 parallelStartSocket(cpus = detectCores())
 #SMOTE the training set

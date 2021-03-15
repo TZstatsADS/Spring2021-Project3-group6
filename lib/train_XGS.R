@@ -9,7 +9,6 @@ train <- function(feature, label,l){
                      nrounds=160,
                      booster = "gbtree",
                      objective = "binary:logistic", 
-                     eval_metric="error",
                      eval_metric="auc")
                  
   return(model)

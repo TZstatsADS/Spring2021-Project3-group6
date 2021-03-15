@@ -6,7 +6,7 @@
 ### Project 3
 
 
-cv.function<- function(data, K,l,p){
+cv.function<- function(data, K,l,p=0.5){
   ### Input:
   ### - features: feature data frame
   ### - labels: label data vector
@@ -31,9 +31,7 @@ cv.function<- function(data, K,l,p){
     feature_train<- as.matrix(dat_train[,-6007])
     label_train<- as.integer(dat_train$label)-1
     
-    data_train.S<- SMOTE(label~.,dat_train)
-    feature_train.S<-as.matrix(data_train.S[,-6007])
-    label_train.S<-as.integer(data_train.S$label)-1
+  
     ## sample reweighting
  
     weight_test <- rep(NA, length(label_test))
@@ -42,8 +40,7 @@ cv.function<- function(data, K,l,p){
       weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
     }
     
-    ## model training( if not want to use SMOTE, can just input feature_train and label_train)
-    model_train <- train(feature_train.S,label_train.S,l) #l is the parameter test 
+    model_train <- train(feature_train,label_train,l) #l is the parameter test 
    
     ## make predictions
     prob_pred<-  predict(model_train, feature_test)
