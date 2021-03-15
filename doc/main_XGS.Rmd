@@ -1,6 +1,6 @@
 ---
 title: "Main"
-author: "Weiwei Song"
+author: "Weiwei Song, Zi Fang"
 output:
   pdf_document: default
   html_notebook: default
@@ -199,7 +199,7 @@ Call the train model and test model from library.
   
   3.Otherwise, you can perform a grid search on rest of the parameters (max_depth, gamma, subsample, colsample_bytree etc) by fixing eta and nrounds. Note: If using gbtree, don't introduce gamma until you see a significant difference in your train and test error.
   
-   4.Using the best parameters from grid search, tune the regularization parameters(alpha,lambda) if required.
+  4.Using the best parameters from grid search, tune the regularization parameters(alpha,lambda) if required.
    
   5.At last, increase/decrease eta and follow the procedure. But remember, excessively lower eta values would allow the model to learn deep interactions in the data and in this process, it might capture noise. So be careful!
   
@@ -326,7 +326,7 @@ hyper_grid_XGB_2<- expand.grid(max_depth=c(8,9,10),
 parallelStartSocket(cpus = detectCores())
 dim(hyper_grid_XGB_2)
 
-run.cv.XGS2=TRUE
+run.cv.XGS2=FALSE
 if(run.cv.XGS2){
   res_cv_XGS2 <- matrix(0, nrow = nrow(hyper_grid_XGB_2), ncol = 4)
   for(i in 1:nrow(hyper_grid_XGB_2)){
@@ -365,40 +365,306 @@ if(run.cv.XGS2){
 
 colnames(res_cv_XGS2)<-c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
 result2<-cbind(hyper_grid_XGB_2[,1:2],res_cv_XGS2)
+# use the output, pick the best max_depth, and min_child_weight using auc
+# the best max_depth is 10, the min_child_weight is 1.5 with max mean auc 0.8080424
+
+par_best_max_depth <- 10; par_best_min_child_weight <- 1.5
 ```
 
 
 
-```{r step2 }
+```{r step3 }
 #tune subsample and colsample (mostly between 0.6-0.9)
+#try to find the max subsample and min colsample
 
+hyper_grid_XGB_3<- expand.grid(max_depth= par_best_max_depth,
+                              min_child_weight=par_best_min_child_weight,
+                              subsample= seq(0.6, 0.9, by=0.1), 
+                              colsample_bytree= seq(0.6, 0.9, by=0.1)
+                               )
+parallelStartSocket(cpus = detectCores())
+dim(hyper_grid_XGB_3)
 
+run.cv.XGS3=FALSE
+if(run.cv.XGS3){
+  res_cv_XGS3 <- matrix(0, nrow = nrow(hyper_grid_XGB_3), ncol = 4)
+  for(i in 1:nrow(hyper_grid_XGB_3)){
+    l<-list(max_depth=hyper_grid_XGB_3$max_depth[i],
+            min_child_weight=hyper_grid_XGB_3$min_child_weight[i],
+            subsample=hyper_grid_XGB_3$subsample[i],
+            colsample_bytree=hyper_grid_XGB_3$colsample_bytree[i])
+    xgbcv<-xgb.cv( params = l,
+          data = dtrain, 
+          nrounds = 160, 
+          nfold = K, 
+          gamma=0,
+          showsd = T, 
+          stratified = T, 
+          early_stop_round = 10,
+          print_every_n=80,
+          eval_metric="auc",
+          eval_metric="error",
+          booster = "gbtree",
+          objective = "binary:logistic", 
+          scale_pos_weight=sumwneg/sumwpos,#because the data is imbalanced 
+          eta=0.3
+          )
+    result<-xgbcv$evaluation_log
+    cv.error<-result$test_error_mean
+    cv.AUC<-result$test_auc_mean
+    res_cv_XGS3[i,1]<-mean(cv.error)
+    res_cv_XGS3[i,2]<-sd(cv.error)
+    res_cv_XGS3[i,3]<-mean(cv.AUC)
+    res_cv_XGS3[i,4]<-sd(cv.AUC)
+  save(res_cv_XGS3, file="../output/res_cv_XGS3.RData")
+  }
+}else{
+  load("../output/res_cv_XGS3.RData")
+}
+colnames(res_cv_XGS3)<-c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
+result3<-cbind(hyper_grid_XGB_3[,3:4],res_cv_XGS3)
 # use the output, pick the best subsample, and colsample_bytree, if it is out of the boundary, so some extra work 
-#par_best_subsample<-
-#par_best_colsmaple<-
+par_best_subsample<- 0.9
+par_best_colsample<- 0.8
 ```
 
 
 
-```{r step 3}
+```{r step 4}
 #tune gamma
+hyper_grid_XGB_4<- c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
+
+run.cv.XGS4=FALSE
+if(run.cv.XGS4){
+  res_cv_XGS4 <- matrix(0, nrow = length(hyper_grid_XGB_4), ncol = 4)
+  for(i in 1:length(hyper_grid_XGB_4)){
+    l<-list(max_depth= par_best_max_depth,
+            min_child_weight=par_best_min_child_weight,
+            subsample= par_best_subsample, 
+            colsample_bytree= par_best_colsample)
+    xgbcv<-xgb.cv( params = l,
+          data = dtrain, 
+          nrounds = 160, 
+          nfold = K, 
+          gamma=hyper_grid_XGB_4[i],
+          showsd = T, 
+          stratified = T, 
+          early_stop_round = 10,
+          print_every_n=80,
+          eval_metric="auc",
+          eval_metric="error",
+          booster = "gbtree",
+          objective = "binary:logistic", 
+          scale_pos_weight=sumwneg/sumwpos,#because the data is imbalanced 
+          eta=0.3
+          )
+    result<-xgbcv$evaluation_log
+    cv.error<-result$test_error_mean
+    cv.AUC<-result$test_auc_mean
+    res_cv_XGS4[i,1]<-mean(cv.error)
+    res_cv_XGS4[i,2]<-sd(cv.error)
+    res_cv_XGS4[i,3]<-mean(cv.AUC)
+    res_cv_XGS4[i,4]<-sd(cv.AUC)
+  save(res_cv_XGS4, file="../output/res_cv_XGS4.RData")
+  }
+}else{
+  load("../output/res_cv_XGS4.RData")
+}
+colnames(res_cv_XGS4)<-c("mean_error", "sd_error", "mean_AUC", "sd_AUC");
+names(hyper_grid_XGB_4) <- c(1, 2, 3, 4, 5, 6, 7)
+result4<-cbind(hyper_grid_XGB_4,res_cv_XGS4)
+colnames(result4) <- c("gamma", colnames(res_cv_XGS4))
+# use the output, pick the best gamma value in terms of mean AUC, if it is out of the boundary, so some extra work 
+par_best_gamma<- 0.1
 
 #do some viusalization, pick the best one 
 ```
 
-```{r step 4}
-
+```{r step 5}
 #tune the learning rate, decrease it 
+#typically, it lies between 0.01 to 0.3
+hyper_grid_XGB_5<- c(0.01, 0.06, 0.11, 0.16, 0.21, 0.27, 0.3)
+
+run.cv.XGS5=FALSE
+if(run.cv.XGS5){
+  res_cv_XGS5 <- matrix(0, nrow = length(hyper_grid_XGB_5), ncol = 4)
+  for(i in 1:length(hyper_grid_XGB_5)){
+    l<-list(max_depth= par_best_max_depth,
+            min_child_weight=par_best_min_child_weight,
+            subsample= par_best_subsample, 
+            colsample_bytree= par_best_colsample)
+    xgbcv<-xgb.cv( params = l,
+          data = dtrain, 
+          nrounds = 160, 
+          nfold = K, 
+          gamma=par_best_gamma,
+          showsd = T, 
+          stratified = T, 
+          early_stop_round = 10,
+          print_every_n=80,
+          eval_metric="auc",
+          eval_metric="error",
+          booster = "gbtree",
+          objective = "binary:logistic", 
+          scale_pos_weight=sumwneg/sumwpos,#because the data is imbalanced 
+          eta=hyper_grid_XGB_5[i]
+          )
+    result<-xgbcv$evaluation_log
+    cv.error<-result$test_error_mean
+    cv.AUC<-result$test_auc_mean
+    res_cv_XGS5[i,1]<-mean(cv.error)
+    res_cv_XGS5[i,2]<-sd(cv.error)
+    res_cv_XGS5[i,3]<-mean(cv.AUC)
+    res_cv_XGS5[i,4]<-sd(cv.AUC)
+  save(res_cv_XGS5, file="../output/res_cv_XGS5.RData")
+  }
+}else{
+  load("../output/res_cv_XGS5.RData")
+}
+colnames(res_cv_XGS5)<-c("mean_error", "sd_error", "mean_AUC", "sd_AUC");
+names(hyper_grid_XGB_5) <- c(1, 2, 3, 4, 5, 6, 7)
+result5<-cbind(hyper_grid_XGB_5,res_cv_XGS5)
+colnames(result5) <- c("eta", colnames(res_cv_XGS5))
+# using the output, the best learning rate in terms of AUC is 0.11 and the second best learning rate is 0.16 
+
+
+# select learning rate = c(0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15) to decide the best learning rate
+
+hyper_grid_XGB_6<- c(0.08, 0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15)
+
+run.cv.XGS6=FALSE
+if(run.cv.XGS6){
+  res_cv_XGS6 <- matrix(0, nrow = length(hyper_grid_XGB_6), ncol = 4)
+  for(i in 1:length(hyper_grid_XGB_6)){
+    l<-list(max_depth= par_best_max_depth,
+            min_child_weight=par_best_min_child_weight,
+            subsample= par_best_subsample, 
+            colsample_bytree= par_best_colsample)
+    xgbcv<-xgb.cv( params = l,
+          data = dtrain, 
+          nrounds = 160, 
+          nfold = K, 
+          gamma=par_best_gamma,
+          showsd = T, 
+          stratified = T, 
+          early_stop_round = 10,
+          print_every_n=80,
+          eval_metric="auc",
+          eval_metric="error",
+          booster = "gbtree",
+          objective = "binary:logistic", 
+          scale_pos_weight=sumwneg/sumwpos,#because the data is imbalanced 
+          eta=hyper_grid_XGB_6[i]
+          )
+    result<-xgbcv$evaluation_log
+    cv.error<-result$test_error_mean
+    cv.AUC<-result$test_auc_mean
+    res_cv_XGS6[i,1]<-mean(cv.error)
+    res_cv_XGS6[i,2]<-sd(cv.error)
+    res_cv_XGS6[i,3]<-mean(cv.AUC)
+    res_cv_XGS6[i,4]<-sd(cv.AUC)
+  save(res_cv_XGS6, file="../output/res_cv_XGS6.RData")
+  }
+}else{
+  load("../output/res_cv_XGS6.RData")
+}
+colnames(res_cv_XGS6)<-c("mean_error", "sd_error", "mean_AUC", "sd_AUC");
+names(hyper_grid_XGB_6) <- c(1, 2, 3, 4, 5, 6, 7, 8)
+result6<-cbind(hyper_grid_XGB_6,res_cv_XGS6)
+colnames(result6) <- c("eta", colnames(res_cv_XGS6))
+
+# use the output, pick the best gamma value in terms of mean AUC, if it is out of the boundary, so some extra work 
+par_best_eta<- 0.10
+
 #if still not performs well, do the regularization parameter tunning
 ```
 
 
 ```{r train_model}
+best_params = list(max_depth= par_best_max_depth, #10
+                   min_child_weight=par_best_min_child_weight,#1.5
+                   subsample= par_best_subsample, #0.9
+                   colsample_bytree= par_best_colsample, #0.8
+                   eta=par_best_eta, #0.10
+                   gamma=par_best_gamma) #0.1
 
+train_XGS <- function(data=dtrain, label=label_train, weight=NULL, params=best_params){
+  module_XGS <- xgboost(data=dtrain, label=label_train, weight=sample.reweight, params=best_params, nrounds = 160) 
+  return(module_XGS)
+}
 ```
 
 ```{r test_model}
+test_XGS <- function(module, test){
+  module_test <- predict(module, test)
+  return(module_test)
+}
 
+```
+
+```{r}
+weight_train <- rep(NA, length(label_train))
+for (v in unique(label_train)){
+  weight_train[label_train == v] = 0.5 * length(label_train) / length(label_train[label_train == v])
+}
+sample.rewight=FALSE
+if (sample.reweight){
+  tm_train_XGS <- system.time(fit_train_XGS <- train_XGS(dtrain, label_train, w=weight_train, best_params))
+} else {
+  tm_train_XGS <- system.time(fit_train_XGS <- train_XGS(dtrain, label_train, weight=NULL, best_params))
+}
+save(fit_train_xgs, file="../output/fit_train_XGS.RData")
+
+
+
+```
+```{r test}
+run.test=TRUE
+feature_test <- as.matrix(dat_test[, -6007])
+if(run.test){
+  load(file="../output/fit_train_XGS.RData")
+  tm_test_XGS <- system.time({label_pred <- as.integer(test_XGS(fit_train_XGS, feature_test)); 
+                            })
+}
+```
+
+```{r}
+accu <- mean(label_test == label_pred)
+tpr.fpr <- WeightedROC(as.numeric(label_pred), label_test)
+auc <- WeightedAUC(tpr.fpr)
+
+
+cat("The accuracy of model is", accu*100, "%.\n")
+cat("The AUC of modelis", auc, ".\n")
+cat("Time for training model=", tm_train_XGS[1], "s \n") 
+cat("Time for testing model=", tm_test_XGS[1], "s \n")
+
+```
+
+
+
+* evaluation
+```{r}
+## reweight the test data to represent a balanced label distribution
+label_test <- as.integer(dat_test$label)
+weight_test <- rep(NA, length(label_test))
+for (v in unique(label_test)){
+  weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
+}
+accu <- sum(weight_test * (label_pred == label_test)) / sum(weight_test)
+tpr.fpr <- WeightedROC(prob_pred, label_test, weight_test)
+auc <- WeightedAUC(tpr.fpr)
+cat("The accuracy of model:", model_labels[which.min(res_cv$mean_error)], "is", accu*100, "%.\n")
+cat("The AUC of model:", model_labels[which.min(res_cv$mean_error)], "is", auc, ".\n")
+```
+
+### Summarize Running Time
+Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
+```{r running_time}
+cat("Time for constructing training features=", tm_feature_train[1], "s \n")
+cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
+cat("Time for training model=", tm_train[1], "s \n") 
+cat("Time for testing model=", tm_test[1], "s \n")
 ```
 
 
@@ -409,7 +675,16 @@ result2<-cbind(hyper_grid_XGB_2[,1:2],res_cv_XGS2)
 
 #the followiing just play around another parameters
 ```{r}
- xgb.cv( params = params, data = dtrain, nrounds = 200, nfold = 5, showsd = T, stratified = T, print_every_n = 10, early_stop_round = 20, maximize = F,eval_metric="auc",eval_metric="error")
+# xgb.cv( params = list(max_depth= par_best_max_depth,
+#           min_child_weight=par_best_min_child_weight,
+#            subsample= par_best_subsample, 
+#            colsample_bytree= par_best_colsample), 
+#         data = dtrain, 
+#         nrounds = 200, 
+#         nfold = 5, 
+#         showsd = T, 
+#         stratified = T, 
+#         print_every_n = 10, early_stop_round = 20, maximize = F,eval_metric="auc",eval_metric="error")
 
 traintask<-makeClassifTask(data=dat_train,target="label")
 testtask<- makeClassifTask(data=dat_test,target="label")
@@ -417,7 +692,7 @@ cv.para.search=TRUE
 if(cv.para.search){
 #create learner 
 lrn_1 <- makeLearner("classif.xgboost",predict.type = "response")
-lrn_1$par.vals <- list( objective="binary:logistic", eval_metric="error",eval_metric="auc", nrounds=200L, eta=0.3,scale_pos_weight=sumwneg/sumwpos)
+lrn_1$par.vals <- list( objective="binary:logistic", eval_metric="error",eval_metric="auc", nrounds=200L, eta=par_best_eta,scale_pos_weight=sumwneg/sumwpos)
 
 #set parameter space 
 params_1<- makeParamSet(
