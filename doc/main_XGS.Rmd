@@ -654,15 +654,17 @@ source("../lib/cross_validation_XGS.R")
 source("../lib/train_XGS.R")
 run.cv.XGB_S<- TRUE 
 if(run.cv.XGB_S){
-  result<-cv.function(
+  res_cv_XGB_S<-cv.function(
     data=dat_train,
             K=5, 
             l=best_params,
             p=0.5) #p: the classification threshold
+  
   save(res_cv_XGB_S, file="../output/res_cv_XGB_S.RData")
 }else{
   load(file="../output/res_cv_XGB_S.RData")
 }
+res_cv_XGB_S<-result
 #preparing 
 parallelStartSocket(cpus = detectCores())
 #SMOTE the training set
