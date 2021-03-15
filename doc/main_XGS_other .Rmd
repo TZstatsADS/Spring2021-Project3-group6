@@ -326,7 +326,7 @@ hyper_grid_XGB_2<- expand.grid(max_depth=c(8,9,10),
 parallelStartSocket(cpus = detectCores())
 dim(hyper_grid_XGB_2)
 
-run.cv.XGS2=TRUE
+run.cv.XGS2=FALSE
 if(run.cv.XGS2){
   res_cv_XGS2 <- matrix(0, nrow = nrow(hyper_grid_XGB_2), ncol = 4)
   for(i in 1:nrow(hyper_grid_XGB_2)){
@@ -404,19 +404,64 @@ result2<-cbind(hyper_grid_XGB_2[,1:2],res_cv_XGS2)
 
 #three other versions of xgboost:
 SMOTE
-Weighted 
+Weighted(Already tuned)
 PCA
 
-don't do any cross validation, just to implementing them on the xgboost model 
+don't do any cross validation, just to implementing them using the xgboost model with best tuning parameters 
+```{r best setting of tunning parameter}
+best_params<- list(
+  max_depth = 10,
+  min_child_weight = 1.5,
+  subsample = 0.9,
+  colsample_bytree = 0.8,
+  eta= 0.10,
+  gamma = 0.1)
 
-```{r SMOTE}
-
-parallelStartSocket(cpus = detectCores())
 
 ```
 
+```{r SMOTE}
+#preparing 
+parallelStartSocket(cpus = detectCores())
+#SMOTE the training set
+train.XGB.SMOTE<-FALSE
+
+data_train.SMOTE<- SMOTE(label~.,dat_train)
+table(data_train.SMOTE$label)
+feature_train.S<-as.matrix(data_train.SMOTE[,-6007])
+label_train.S<-as.integer(data_train.SMOTE$label)-1
+table(label_train.S)
+#Preparing XGboost
+dtrain.SMOTE<-xgb.DMatrix(feature_train.S, label=label_train.S)
+#train the XGBoost+SMOTE 
+xgb.SMOTE<-xgb.train(params=best_params,
+                data=dtrain.SMOTE,
+                nrounds=160,
+          eval_metric="auc",
+          eval_metric="error",
+          booster = "gbtree",
+          objective = "binary:logistic")
+feature_test<-as.matrix(dat_test[,-6007])
+label_test<- as.integer(dat_test$label)-1
+xgb.SMOTE.pred<-predict(xgb.SMOTE,feature_test)
+xgb.SMOTE.label<-ifelse(xgb.SMOTE.pred>0.5,1,0)
+xgb_smote.cm<-confusionMatrix(as.factor(xgb.SMOTE.label), as.factor(label_test))
+xgb_smote.cm #balanced accuracy 0.7080 
+auc<-roc(label_test,xgb.SMOTE.pred)$auc # 0.829
+weight_test <- rep(NA, length(label_test))
+for (v in unique(label_test)){
+  weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
+}
+fr.tr<-WeightedROC(xgb.SMOTE.pred,label_test,weight_test)
+ auc<-WeightedAUC(fr.tr) #weighted auc 0.829
+```
+
 ```{r Weighted}
--
+ 
+```
+
+```{r}
+
 ```
 
 
