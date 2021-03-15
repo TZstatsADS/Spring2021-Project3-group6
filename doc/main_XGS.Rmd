@@ -250,10 +250,10 @@ levels(factor(xgbpred))
 levels(factor(label_test))
 library(caret)
 confM<-confusionMatrix(factor(xgbpred.label),factor(label_test))
-#accuracy 0.8433
+#accuracy 0.8433 
 #balanced accuracy 0.6886
 auc<-roc(factor(label_test),xgbpred.prob)$auc
-#auc:0.8489(high)
+#auc:0.8489(high) not weighted 
 #  view variable importance plot 
 mat<- xgb.importance(feature_names=colnames(feature_train),model=xgb1)
 xgb.plot.importance(importance_matrix = mat[1:20])
@@ -323,7 +323,7 @@ hyper_grid_XGB_2<- expand.grid(max_depth=c(8,9,10),
                               subsample=0.8, 
                               colsample_bytree=0.8
                                )
-parallelStartSocket(cpus = detectCores())
+
 dim(hyper_grid_XGB_2)
 
 run.cv.XGS2=FALSE
@@ -373,7 +373,7 @@ par_best_max_depth <- 10; par_best_min_child_weight <- 1.5
 
 
 
-```{r step3 }
+```{r XGBtune_step3 }
 #tune subsample and colsample (mostly between 0.6-0.9)
 #try to find the max subsample and min colsample
 
@@ -430,7 +430,7 @@ par_best_colsample<- 0.8
 
 
 
-```{r step 4}
+```{r XGBtune_step4}
 #tune gamma
 hyper_grid_XGB_4<- c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
 
@@ -480,7 +480,7 @@ par_best_gamma<- 0.1
 #do some viusalization, pick the best one 
 ```
 
-```{r step 5}
+```{r XGBtune_step5}
 #tune the learning rate, decrease it 
 #typically, it lies between 0.01 to 0.3
 hyper_grid_XGB_5<- c(0.01, 0.06, 0.11, 0.16, 0.21, 0.27, 0.3)
@@ -580,73 +580,118 @@ par_best_eta<- 0.10
 ```
 
 
-```{r train_model}
+```{r train_model_XGBW}
+ 
 best_params = list(max_depth= par_best_max_depth, #10
                    min_child_weight=par_best_min_child_weight,#1.5
                    subsample= par_best_subsample, #0.9
                    colsample_bytree= par_best_colsample, #0.8
                    eta=par_best_eta, #0.10
                    gamma=par_best_gamma) #0.1
-
-train_XGS <- function(data=dtrain, label=label_train, weight=NULL, params=best_params){
-  module_XGS <- xgboost(data=dtrain, label=label_train, weight=sample.reweight, params=best_params, nrounds = 160) 
-  return(module_XGS)
+feature_train = as.matrix(dat_train[, -6007])
+label_train = as.integer(dat_train$label)-1
+dtrain<-xgb.DMatrix(feature_train,label=label_train)
+sumwpos<-sum(label_train==1)
+sumwneg<-sum(label_train==0)
+train.XGB_W<-TRUE
+if(train.XGB_W){
+tm_train_XGB_W <- system.time(
+   fit_train_XGB_W <- xgb.train(params=best_params,
+                data=dtrain,
+                nrounds=160,
+                eval_metric="error",
+                eval_metric="auc",
+                 booster = "gbtree",
+          objective = "binary:logistic", 
+          scale_pos_weight=sumwneg/sumwpos))
+save(fit_train_XGB_W, file="../output/fit_train_XGB_W.RData")}else{
+  load(file="../output/fit_train_XGB_W.RData")
 }
 ```
 
-```{r test_model}
-test_XGS <- function(module, test){
-  module_test <- predict(module, test)
-  return(module_test)
-}
-
-```
-
-```{r}
-weight_train <- rep(NA, length(label_train))
-for (v in unique(label_train)){
-  weight_train[label_train == v] = 0.5 * length(label_train) / length(label_train[label_train == v])
-}
-sample.rewight=FALSE
-if (sample.reweight){
-  tm_train_XGS <- system.time(fit_train_XGS <- train_XGS(dtrain, label_train, w=weight_train, best_params))
-} else {
-  tm_train_XGS <- system.time(fit_train_XGS <- train_XGS(dtrain, label_train, weight=NULL, best_params))
-}
-save(fit_train_xgs, file="../output/fit_train_XGS.RData")
-
-
-
-```
-```{r test}
-run.test=TRUE
+```{r test_XGB_W}
+tm_test = NA
 feature_test <- as.matrix(dat_test[, -6007])
-if(run.test){
-  load(file="../output/fit_train_XGS.RData")
-  tm_test_XGS <- system.time({label_pred <- as.integer(test_XGS(fit_train_XGS, feature_test)); 
-                            })
+test.XGB_W<-TRUE
+if(test.XGB_W){
+  load(file="../output/fit_train_XGB_W.RData")
+  tm_test.XGB_W <- system.time({prob_pred <- predict(fit_train_XGB_W, feature_test);
+                          label_pred<- ifelse(prob_pred>.5,1,0)})
+}
+
+
+```
+
+```{r eva_XGB_W}
+label_test <- as.integer(dat_test$label)-1
+weight_test <- rep(NA, length(label_test))
+for (v in unique(label_test)){
+  weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
+}
+confusionMatrix(as.factor(label_pred), as.factor(label_test))
+accu <- sum(weight_test * (label_pred == label_test)) / sum(weight_test)
+tpr.fpr <- WeightedROC(prob_pred, label_test, weight_test)
+auc <- WeightedAUC(tpr.fpr)
+cat("The accuracy of XGboost with weight model", "is", accu*100, "%.\n")
+cat("The AUC of  XGboost with weight model", "is", auc, ".\n")
+
+```
+
+
+### Summarize Running Time
+Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
+```{r running_time_XGBW}
+cat("Time for constructing training features=", tm_feature_train[1], "s \n")
+cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
+cat("Time for training Weighted xgboost=", tm_train_XGB_W[1], "s \n") 
+cat("Time for testing Weighted xgboost=", tm_test.XGB_W[1], "s \n")
+```
+
+Please orgranize this a little bit 
+```{r train XGB_S}
+#preparing 
+parallelStartSocket(cpus = detectCores())
+#SMOTE the training set
+SMOTE_data=FALSE
+if(SMOTE_data){
+data_train.SMOTE<- SMOTE(label~.,dat_train)
+table(data_train.SMOTE$label)
+feature_train.S<-as.matrix(data_train.SMOTE[,-6007])
+label_train.S<-as.integer(data_train.SMOTE$label)-1
+table(label_train.S)
+dtrain_S<-xgb.DMatrix(feature_train.S,label=label_train.S)
+save(dtrain_S,file="../output/dtrain_S.RData")}else{
+  load(file="../output/dtrain_S.RData")
+}
+
+#train the XGBoost+SMOTE 
+train.XGB_S<-FALSE
+if(train.XGB_S){
+tm_train_XGB_<- system.time(
+  train_XGB_S<- xgb.train(params=best_params,
+                data=dtrain_S,
+                nrounds=160,
+                eval_metric="error",
+                eval_metric="auc",
+                 booster = "gbtree",
+          objective = "binary:logistic"))
+save( train_XGB_S, file="../output/train_XGB_S.RData")
+}else{
+  load(file="../output/train_XGB_S.RData")
 }
 ```
 
-```{r}
-accu <- mean(label_test == label_pred)
-tpr.fpr <- WeightedROC(as.numeric(label_pred), label_test)
-auc <- WeightedAUC(tpr.fpr)
 
 
-cat("The accuracy of model is", accu*100, "%.\n")
-cat("The AUC of modelis", auc, ".\n")
-cat("Time for training model=", tm_train_XGS[1], "s \n") 
-cat("Time for testing model=", tm_test_XGS[1], "s \n")
-
-```
-
-
-
-* evaluation
-```{r}
-## reweight the test data to represent a balanced label distribution
-label_test <- as.integer(dat_test$label)
+```{r test XGB_S}
+test.XGB_S=FALSE
+if(test.XGB_S){
+ load(file="../output/train_XGB_S.RData")
+tm_test_XGBS<-system.time(
+  {pro_pred<-predict(train_XGB_S,feature_test);
+label_pred<-ifelse(pro_pred>0.5,1,0)}
+)}
+label_test <- as.integer(dat_test$label)-1
 weight_test <- rep(NA, length(label_test))
 for (v in unique(label_test)){
   weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
@@ -654,8 +699,8 @@ for (v in unique(label_test)){
 accu <- sum(weight_test * (label_pred == label_test)) / sum(weight_test)
 tpr.fpr <- WeightedROC(prob_pred, label_test, weight_test)
 auc <- WeightedAUC(tpr.fpr)
-cat("The accuracy of model:", model_labels[which.min(res_cv$mean_error)], "is", accu*100, "%.\n")
-cat("The AUC of model:", model_labels[which.min(res_cv$mean_error)], "is", auc, ".\n")
+cat("The accuracy of GBM+SMOTE model is", accu*100, "%.\n")
+cat("The AUC of GBM+SMOTE model is", auc, ".\n")
 ```
 
 ### Summarize Running Time
@@ -663,88 +708,12 @@ Prediction performance matters, so does the running times for constructing featu
 ```{r running_time}
 cat("Time for constructing training features=", tm_feature_train[1], "s \n")
 cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
-cat("Time for training model=", tm_train[1], "s \n") 
-cat("Time for testing model=", tm_test[1], "s \n")
+cat("Time for training GBM+SMOTE model=", tm_train_XGB_[1], "s \n") 
+cat("Time for testing GBM+SMOTE model=", tm_test_XGBS[1], "s \n")
 ```
 
 
 
-
-
-
-
-#the followiing just play around another parameters
-```{r}
-# xgb.cv( params = list(max_depth= par_best_max_depth,
-#           min_child_weight=par_best_min_child_weight,
-#            subsample= par_best_subsample, 
-#            colsample_bytree= par_best_colsample), 
-#         data = dtrain, 
-#         nrounds = 200, 
-#         nfold = 5, 
-#         showsd = T, 
-#         stratified = T, 
-#         print_every_n = 10, early_stop_round = 20, maximize = F,eval_metric="auc",eval_metric="error")
-
-traintask<-makeClassifTask(data=dat_train,target="label")
-testtask<- makeClassifTask(data=dat_test,target="label")
-cv.para.search=TRUE 
-if(cv.para.search){
-#create learner 
-lrn_1 <- makeLearner("classif.xgboost",predict.type = "response")
-lrn_1$par.vals <- list( objective="binary:logistic", eval_metric="error",eval_metric="auc", nrounds=200L, eta=par_best_eta,scale_pos_weight=sumwneg/sumwpos)
-
-#set parameter space 
-params_1<- makeParamSet(
-  makeIntegerParam("max_depth", lower=3L, upper=10L),
-  makeNumericParam("min_child_weight", lower=1L, upper=10L),
-  makeNumericParam("subsample",lower = 0.5,upper = 1),
-  makeNumericParam("colsample_bytree",lower = 0.5,upper = 1)
-)
-
-#set resampling strategy 
-rdesc_1<- makeResampleDesc("CV", stratify=T, iters=5L)
-#search strategy 
-ctrl_1<- makeTuneControlRandom(maxit=100L)#100 models
-#set parallel backend 
-parallelStartSocket(cpus = detectCores())
-mytune_1 <- tuneParams(learner = lrn_1, task = traintask, resampling = rdesc_1, measures = acc, par.set = params_1, control = ctrl_1, show.info = T)
-save(mytune_1, file="../output/res_cv_XGS.Step2.RData")
-}else{
-   load("../output/res_cv_XGS.Step2.RData")
-}
-mytune_1$y
-#set hyperparameters 
-lrn_tune_1 <- setHyperPars(lrn_1,par.vals = mytune_1$x)
-#train model 
-xgmodel_1 <- train(learner = lrn_tune_1,task = traintask)
-#predict model 
-xgpred_1.prob<- predict(xgmodel_1,testtask)
-confusionMatrix(xgpred_1$data$response,xgpred_1$data$truth)# accracy=0.835, balanced accuracy=0.6544
-auc_1<-roc(factor(label_test),xgbpred_1.prob)$auc #0.84 same as the default
-
-#Result:Op. pars: max_depth=10; min_child_weight=9.93; subsample=0.846; colsample_bytree=0.627
-#acc.test.mean=0.8441751, smaller than the default, why??????
-#need auc and accuracy from confusion matrix 
-```
-
-```{r XGBtune_step3}
-# regulariztion tuning 
-#high dimention using alpha to have a try 
-#may be 
-param_alpha<-
-```
-
-
-
-### Summarize Running Time
-Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
-```{r running_time}
-cat("Time for constructing training features=", tm_feature_train[1], "s \n")
-cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
-cat("Time for training model=", tm_train[1], "s \n") 
-cat("Time for testing model=", tm_test[1], "s \n")
-```
 
 ###Reference
 - Du, S., Tao, Y., & Martinez, A. M. (2014). Compound facial expressions of emotion. Proceedings of the National Academy of Sciences, 111(15), E1454-E1462.

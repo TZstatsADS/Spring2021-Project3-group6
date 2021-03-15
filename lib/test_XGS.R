@@ -2,7 +2,7 @@
 ### Make predictions with test features ###
 ###########################################################
 
-test <- function(model, test_data){
+test.XGB <- function(model, test_data){
   res <- predict(model, 
                 test_data )
   return(res)
