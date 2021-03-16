@@ -2,7 +2,7 @@
 ### Train a classification model with training features ###
 ###########################################################
 
-train <- function(features, labels, num_tree,mtry){
+train_BRF <- function(features, labels, num_tree,mtry){
   model <- ranger(labels~.,
                   data=data.frame(cbind(features,labels)),
                   num.trees=num_tree,
