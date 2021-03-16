@@ -6,7 +6,7 @@
 ### Project 3
 
 
-cv.function <- function(features, labels, K, num_tree,mtry){
+cv.function_BRF <- function(features, labels, K, num_tree,mtry){
   ### Input:
   ### - features: feature data frame
   ### - labels: label data vector
@@ -33,18 +33,20 @@ cv.function <- function(features, labels, K, num_tree,mtry){
     data_train<-ROSE(label_train~., data=data_train)$data
     feature_train<-data_train[,-6007]
     label_train<-data_train[,6007]
-  
+    
+    weight_test <- rep(NA, length(label_test))
+    for (v in unique(labels)){
+      weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
+    }
+    
     ## model training
-      model_train <- train(feature_train, label_train, num_tree,mtry)
-   
+      model_train <- train_BRF(feature_train, label_train, num_tree,mtry)
+
     ## make predictions
-    prob_pred <- test(model_train, feature_test)$predictions
-    length(prob_pred[,2])
-    length(label_pred)
+    prob_pred <- test_BRF(model_train, feature_test)$predictions
     label_pred <- ifelse(prob_pred[,1]>prob_pred[,2],1,2)
-    cv.error[i] <- 1 - sum(label_pred == label_test)/length(label_test)
-    weight_test<-rep(1,length(label_test))
-    tpr.fpr <- WeightedROC(prob_pred[,2],label_test,weight_test)
+    cv.error[i] <- 1 - sum(weight_test * (label_pred == label_test)) / sum(weight_test)
+    tpr.fpr <- WeightedROC(prob_pred[,2], label_test, weight_test)
     cv.AUC[i] <- WeightedAUC(tpr.fpr)
   }
   return(c(mean(cv.error),sd(cv.error), mean(cv.AUC), sd(cv.AUC)))
