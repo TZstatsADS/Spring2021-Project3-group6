@@ -1,15 +1,11 @@
 ---
-title: "Main-Random Forest Model for imbalanced binary classification"
+title: "Random Forest Model for imbalanced binary classification"
 author: "Weiwei Song"
 output:
   pdf_document: default
-  html_notebook: default
 ---
-
-In your final repo, there should be an R markdown file that organizes **all computational steps** for evaluating your proposed Facial Expression Recognition framework. 
-
-This file is currently a template for running evaluation experiments. You should update it according to your codes but following precisely the same structure. 
-
+This files contains contains two algorithms about the random forest:
+One is the weighted random forest and another one is the weighted random forest. 
 ```{r message=FALSE}
 if(!require("EBImage")){
   install.packages("BiocManager")
@@ -117,16 +113,17 @@ run.feature.test <- TRUE # process features for test set
 sample.reweight <- TRUE # run sample reweighting in model training
 
 run.cv.WRF<-FALSE 
-run.train.WRF<-FALSE 
-run.test.WRF<-FALSE
+run.train.WRF<-TRUE 
+run.test.WRF<-TRUE
 
-run.cv.BRF<-FALSE
-run.train.BRF<-FALSE
-run.test.BRF<-FALSE
+run.cv.BRF<-TRUE
+run.train.BRF<-TRUE
+run.test.BRF<-TRUE
 ```
 
 Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications. 
 
+Noted: use the same parameter lists to do grid search 
 ```{r model_setup}
 ##Random Forest 
 hyper_grid_RF<- expand.grid(
@@ -175,7 +172,6 @@ save(fiducial_pt_list, file="../output/fiducial_pt_list.RData")
 ### Step 3: construct features and responses
 
 + The follow plots show how pairwise distance between fiducial points can work as feature for facial emotion recognition.
-
   + In the first column, 78 fiducials points of each emotion are marked in order. 
   + In the second column distributions of vertical distance between right pupil(1) and  right brow peak(21) are shown in  histograms. For example, the distance of an angry face tends to be shorter than that of a surprised face.
   + The third column is the distributions of vertical distances between right mouth corner(50)
@@ -242,7 +238,7 @@ if(run.cv.BRF){
   for(i in 1:nrow(hyper_grid_RF)){
     cat("n_tree =", hyper_grid_RF$ntree[i],
         ", mtry=", hyper_grid_RF$mtry[i],"\n")
-    res_cv_BRF[i,] <- cv.function(features = feature_train, 
+    res_cv_BRF[i,] <- cv.function_BRF(features = feature_train, 
                               labels = label_train, K, 
                               num_tree=hyper_grid_RF$ntree[i],
                               mtry=hyper_grid_RF$mtry[i])
@@ -252,6 +248,7 @@ if(run.cv.BRF){
   load("../output/res_cv_BRF.RData")
 }
 ```
+
 ```{r cv_vis_BRF,out.width = "65%",fig.align = 'center',echo=FALSE}
 
 res_cv_BRF <- as.data.frame(res_cv_BRF) 
@@ -283,7 +280,7 @@ if (run.train.BRF) {
       dat_train.ROSE<- ROSE(label~.,data=dat_train)$data
       feature_train<-dat_train.ROSE[,-6007]
       label_train<- dat_train.ROSE[,6007]
-      fit_train_BRF <- train(features = feature_train, labels = label_train,
+      fit_train_BRF <- train_BRF(features = feature_train, labels = label_train,
                                  num_tree = par_best_ntree,
                                  mtry = par_best_mtry)})
 
@@ -298,25 +295,29 @@ tm_test_BRF = NA
 feature_test <- as.matrix(dat_test[, -6007])
 if(run.test.BRF){
   load(file="../output/fit_train_BRF.RData")
-  tm_test_BRF <- system.time({ prob_pred <- test(fit_train_BRF, feature_test)$predictions
+  tm_test_BRF <- system.time({ prob_pred <- test_BRF(fit_train_BRF, feature_test)$predictions
                               label_pred <- ifelse(prob_pred[,1]>prob_pred[,2],1,2)})
 }
 ```
 
 ```{r}
 label_test <- as.integer(dat_test$label)
-weight_test<-rep(1, length(label_test))
-accu <- sum(label_pred == label_test)/length(label_test)
-weight_test<-rep(1,length(label_test))
- tpr.fpr <- WeightedROC(prob_pred[,2],label_test,weight_test)
+weight_test <- rep(NA, length(label_test))
+for (v in unique(label_test)){
+ weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
+}
+accu <- sum(weight_test * (label_pred == label_test)) / sum(weight_test)
+tpr.fpr <- WeightedROC(prob_pred[,2], label_test, weight_test)
 auc <- WeightedAUC(tpr.fpr)
 cat("The accuracy of BRF model:", "ntree=", par_best_ntree ,", mtry=", par_best_mtry, "is", accu*100, "%.\n")
 cat("The AUC of BRF model:", "ntree=", par_best_ntree ,", mtry=", par_best_mtry, "is", auc, ".\n")
 ```
+
 ```{r}
 cat("Time for training Balanced Random Forest model=", tm_train_BRF[1], "s \n") 
 cat("Time for testing Balanced Random Forest model=", tm_test_BRF[1], "s \n")
 ```
+
 ```{r loadlib_WRF}
 source("../lib/train_WRF.R") 
 source("../lib/test_WRF.R")
@@ -334,7 +335,7 @@ if(run.cv.WRF){
   for(i in 1:nrow(hyper_grid_RF)){
     cat("n_tree =", hyper_grid_RF$ntree[i],
         ", mtry=", hyper_grid_RF$mtry[i],"\n")
-    res_cv_WRF[i,] <- cv.function(features = feature_train, 
+    res_cv_WRF[i,] <- cv.function_WRF(features = feature_train, 
                               labels = label_train, K, 
                               num_tree=hyper_grid_RF$ntree[i],
                               mtry=hyper_grid_RF$mtry[i],
@@ -344,46 +345,11 @@ if(run.cv.WRF){
 }else{
   load("../output/res_cv_WRF.RData")
 }
-# trial<-ranger(label_train~.,
-#        data=data.frame(cbind(label_train,feature_train)),
-#        num.trees=100,
-#        mtry=39,
-#         classification=TRUE,
-#                   probability = T,
-#                   verbose = F,
-#                   write.forest = T,
-#                   regularization.factor = 1,
-#                   importance = "none",
-#                   min.node.size = 10)
-# prob_pred<-predict(trial,feature_test)$predictions
-# label_pred <- ifelse(prob_pred[,1]>=prob_pred[,2],1,2)
-# table(label_pred)
-# nrow(prob_pred)
-# length(label_test)
-# cv.error <- 1 - sum(weight_test*(label_pred == label_test))/sum(weight_test)
-# tpr.fpr <- WeightedROC(prob_pred[,2],label_test,weight_test)
-# cv.AUC <- WeightedAUC(tpr.fpr)
-# 
-# 
-# trial1<-ranger(label_train~.,
-#        data=data.frame(cbind(label_train,feature_train)),
-#        num.trees=100,
-#        mtry=39,
-#         classification=TRUE,
-#                   verbose = F,
-#                   write.forest = T,
-#                   regularization.factor = 1,
-#                   importance = "none",
-#                   min.node.size = 10)
-# ?ranger()
-# labels_pred3<-predict(trial1,feature_test,type="response")$predictions
-# table(labels_pred3)
-
 ```
 
 Visualize cross-validation results. 
 ```{r cv_vis_WRF,out.width = "65%",fig.align = 'center',echo=FALSE}
-  #increasing the number of mtry improve the performance 
+#increasing the number of mtry improve the performance 
 res_cv_WRF <- as.data.frame(res_cv_WRF) 
 colnames(res_cv_WRF) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
 result_cv_WRF <- cbind(hyper_grid_RF,res_cv_WRF)
@@ -394,21 +360,18 @@ result_cv_WRF <- cbind(hyper_grid_RF,res_cv_WRF)
 p1=ggplot(result_cv_WRF)+
   geom_tile(aes(x=ntree,y=mtry,fill=mean_AUC))+
   labs(title="mean_AUC heatmap for Random Forest Model",x="ntree",y="mtry")
-  
-  
 p2=ggplot(result_cv_WRF)+
   geom_tile(aes(x=ntree,y=mtry,fill=mean_error))+
   labs(title="mean_error heatmaps for Random Forest Model", x="ntree",y="mtry")
-
 grid.arrange(p1,p2,nrow=2)
 
 ```
 
 * Choose the "best" parameter value
 ```{r best_model_WRF}
-par_best_WRF <-hyper_grid_RF[which.max(result_cv_RF$mean_AUC),]
-par_best_ntree<- par_best_RF$ntree
-par_best_mtry<- par_best_RF$mtry
+par_best_WRF <-hyper_grid_RF[which.max(result_cv_WRF$mean_AUC),]
+par_best_ntree<- par_best_WRF$ntree
+par_best_mtry<- par_best_WRF$mtry
 ```
 
 * Train the model with the entire training set using the selected model (model parameter) via cross-validation.
@@ -423,13 +386,13 @@ if (run.train.WRF) {
 
   if (sample.reweight){
     tm_train_WRF <- system.time(
-      fit_train_WRF <- train(features = feature_train, labels = label_train,
+      fit_train_WRF <- train_WRF(features = feature_train, labels = label_train,
                                  w =  weight_train,
                                  num_tree = par_best_ntree,
                                  mtry = par_best_mtry))
   }else{
     tm_train_WRF <- system.time(
-      fit_train_WRF <- train(features = feature_train, labels = label_train,
+      fit_train_WRF <- train_WRF(features = feature_train, labels = label_train,
                                  w =  NULL, 
                                 num_tree = par_best_ntree,
                                  mtry = par_best_mtry))
@@ -446,7 +409,7 @@ if (run.train.WRF) {
 feature_test <- as.matrix(dat_test[, -6007])
 if(run.test.WRF){
   load(file="../output/fit_train_WRF.RData")
-  tm_test_WRF <- system.time({ prob_pred <- test(fit_train_WRF, feature_test)$predictions
+  tm_test_WRF <- system.time({ prob_pred <- test_WRF(fit_train_WRF, feature_test)$predictions
                               label_pred <- ifelse(prob_pred[,1]>prob_pred[,2],1,2)})
 }
 ```
