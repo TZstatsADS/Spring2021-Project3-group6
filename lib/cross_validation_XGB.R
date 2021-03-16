@@ -42,9 +42,9 @@ cv.function_XGB<- function(data, K,l,p=0.5,reweight = FALSE){
     
     ## model training
     if (reweight){
-      model_train <- train_XGB(feature_train, lab_train,l,w = weight_train)
+      model_train <- train_XGB(feature_train, label_train,l,w = weight_train)
     } else {
-      model_train <- train_XGB(feature_train, lab_train, l, w = NULL)
+      model_train <- train_XGB(feature_train, label_train, l, w = NULL)
     }
     
   

@@ -9,7 +9,10 @@ train_XGS <- function(feature, label,l){
                      nrounds=100,
                      booster = "gbtree",
                      objective = "binary:logistic", 
-                     eval_metric="auc")
+                     eval_metric="auc",
+                     verbose=0,
+                     early_stopping_rounds=10,
+                     maximize=TRUE)
                  
   return(model)
 }
