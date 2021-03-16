@@ -16,7 +16,10 @@ Term: Spring 2021
 	+ Zi Fang
 	+ Jimmy Smiley
 
-+ Project summary: In this project, we created a classification engine for facial emotion recognition. 
++ Project summary: In this project, we created a classification engine for facial emotion recognition. 78 fiducials points of each emotion are marked in order for analysis. 
+  + Distributions of vertical distance between right pupil(1) and  right brow peak(21) are shown in  histograms. For example, the distance of an angry face tends to be shorter than that of a surprised face.
+  + The distributions of vertical distances between right mouth corner(50)
+and the midpoint of the upper lip(52).  For example, the distance of an happy face tends to be shorter than that of a sad face.
 	
 **Contribution statement**: ([default](doc/a_note_on_contributions.md)) All team members contributed equally in all stages of this project. All team members approve our work presented in this GitHub repository including this contributions statement. 
 
