@@ -89,6 +89,7 @@ run.test <- TRUE # run evaluation on an independent test set
 run.feature.test <- TRUE # process features for test set
 run.cv.XGS<-FALSE
 fit.train.XGS<-TRUE
+run.test.XGS<-TRUE
 
 ```
 
@@ -220,7 +221,7 @@ res_cv_XGS <- as.data.frame(res_cv_XGS)
 colnames(res_cv_XGS) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
 result_cv_XGS<- cbind(hyper_grid_XGS,res_cv_XGS)
 
-if(run.cv.XGS){
+
   p1 <- result_cv_XGS %>%
     ggplot(aes(x = as.factor(max_depth), y = mean_error,
                ymin = mean_error - sd_error, ymax = mean_error + sd_error)) +
@@ -235,7 +236,7 @@ if(run.cv.XGS){
 
   print(p1)
   print(p2)
-}
+
 
 
 ```
