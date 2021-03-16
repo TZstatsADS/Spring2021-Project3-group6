@@ -175,14 +175,7 @@ if(run.feature.test){
 # this part is built to indicate how we find the number of PC corresponding to 95% explained variance
 feature_train = as.matrix(dat_train[, -6007])
 
-run.entire.pca <- FALSE
-if(run.entire.pca){
-
 pca.entire <- prcomp(feature_train, scale=T)
-
-save(pca.entire, file="../output/pca_entire_result.RData")
-}else{
-  load("../output/pca_entire_result.RData")}
 
 
 biplot(pca.entire, cex=.3)
