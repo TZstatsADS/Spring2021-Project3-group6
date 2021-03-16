@@ -172,21 +172,29 @@ if(run.feature.test){
 ### Step 4: Train a classification model
 
 ```{r}
+# this part is built to indicate how we find the number of PC corresponding to 95% explained variance
 feature_train = as.matrix(dat_train[, -6007])
 
-pca <- prcomp(feature_train, scale=T)
+run.entire.pca <- FALSE
+if(run.entire.pca){
+
+pca.entire <- prcomp(feature_train, scale=T)
+
+save(pca.entire, file="../output/pca_entire_result.RData")
+}else{
+  load("../output/pca_entire_result.RData")}
 
 
-biplot(pca, cex=.3)
+biplot(pca.entire, cex=.3)
 
-screeplot(pca, main="Screenplot", type="l")
+screeplot(pca.entire, main="Zi's Screenplot", type="l")
 
-plot(1:2400,cumsum(pca$sdev^2 / sum(pca$sdev^2)), type="l", col="purple",
-     lwd=3, xlab="Number of Features", ylab="Cumulative Explained Variance")
+plot(1:2400,cumsum(pca.entire$sdev^2 / sum(pca.entire$sdev^2)), type="l", col="purple",
+     lwd=3, xlab="Number of Features", ylab="Zi's Cumulative Explained Variance", main="Cumulative Explained Variance Plot")
 
 abline(h=.95,col='red', lty=2)   
 abline(v=31,col='red', lty=2) 
-s <- as.data.frame( summary(pca)$importance )
+s <- as.data.frame( summary(pca.entire)$importance )
 s[63:68]
 ```
 
@@ -212,7 +220,7 @@ label_train = as.integer(dat_train$label)
 train_start = proc.time()
 if(run.train.lda){
   lda_M <- lda(label_train~., data=as.data.frame(pca$x))
-  save(pca, file="../output/fit_train_lda.RData")
+  save(lda_M, file="../output/fit_train_lda.RData")
 }else{
   load("../output/fit_train_lda.RData")}
 train_end = proc.time()
@@ -255,7 +263,12 @@ test_time[1]
 
 
 roc <- roc(as.integer(new_test$class), as.integer(label_test))
-auc(roc)
+auc <- auc(roc)
+
+result <- data.frame(train_error, test_error, accuracy, pca_time[1], train_time[1], test_time[1], auc,
+                     row.names = "PCA+LDA result")
+colnames(result) <- c("train error", "test error", "accuracy", "PCA running time", "train time", "test time", "AUC")
+result
 ```
 
 
