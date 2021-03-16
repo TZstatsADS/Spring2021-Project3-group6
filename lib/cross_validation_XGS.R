@@ -43,7 +43,7 @@ cv.function<- function(data, K,l,p){
     }
     
     ## model training( if not want to use SMOTE, can just input feature_train and label_train)
-    model_train <- train(feature_train.S,label_train.S,l) #l is the parameter test 
+    model_train <- train_XGS(feature_train.S,label_train.S,l) #l is the parameter test 
    
     ## make predictions
     prob_pred<-  predict(model_train, feature_test)
