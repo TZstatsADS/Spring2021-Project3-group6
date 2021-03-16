@@ -6,7 +6,7 @@
 ### Project 3
 
 
-cv.function <- function(features, labels, K, num_tree,mtry, reweight = FALSE){
+cv.function_WRF <- function(features, labels, K, num_tree,mtry, reweight = FALSE){
   ### Input:
   ### - features: feature data frame
   ### - labels: label data vector
