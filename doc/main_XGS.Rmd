@@ -1,14 +1,10 @@
 ---
 title: "Main"
-author: "Weiwei Song, Zi Fang"
+author: "Weiwei Song"
 output:
   pdf_document: default
-  html_notebook: default
 ---
-
-In your final repo, there should be an R markdown file that organizes **all computational steps** for evaluating your proposed Facial Expression Recognition framework. 
-
-This file is currently a template for running evaluation experiments. You should update it according to your codes but following precisely the same structure. 
+ 
 
 ```{r message=FALSE}
 if(!require("EBImage")){
@@ -44,15 +40,7 @@ if(!require("glmnet")){
 if(!require("WeightedROC")){
   install.packages("WeightedROC")
 }
-if(!require("DMwR")){
-  install.packages("DMwR")
-}
-if(!require("mlr")){
-  install.packages("mlr")
-}
-library(parallel)
-library(parallelMap)
-library(mlr)
+
 library(R.matlab)
 library(readxl)
 library(dplyr)
@@ -62,9 +50,6 @@ library(caret)
 library(glmnet)
 library(WeightedROC)
 library(randomForest)
-library(xgboost)
-library(DMwR)
-library(pROC)
 
 ```
 
@@ -99,12 +84,22 @@ In this chunk, we have a set of controls for the evaluation experiments.
 run.cv <- FALSE # run cross-validation on the training set
 sample.reweight <- TRUE # run sample reweighting in model training
 K <- 5  # number of CV folds
-run.feature.train <- FALSE # process features for training set
-run.test <- FALSE # run evaluation on an independent test set
-run.feature.test <- FALSE # process features for test set
+run.feature.train <- TRUE # process features for training set
+run.test <- TRUE # run evaluation on an independent test set
+run.feature.test <- TRUE # process features for test set
+run.cv.XGS<-FALSE
+fit.train.XGS<-TRUE
+
 ```
 
 Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications. In this Starter Code, we tune parameter lambda (the amount of shrinkage) for logistic regression with LASSO penalty.
+
+```{r model_setup}
+hyper_grid_XGS<- expand.grid(
+ max_depth= c(1,3,5,7,9,10,11,13,15,17,19)
+                   )
+dim(hyper_grid_XGS)
+```
 
 ### Step 2: import data and train-test split 
 ```{r}
@@ -191,604 +186,118 @@ Call the train model and test model from library.
   + Input: an R object that contains a trained classifier.
   + Output: training model specification
 
-### parameter tuning 
++ In this Starter Code, we use logistic regression with LASSO penalty to do classification. 
 
-  1.First, you build the xgboost model using default parameters. You might be surprised to see that default parameters sometimes give impressive accuracy.
-  
-  2.If you get a depressing model accuracy, do this: fix eta = 0.1, leave the rest of the parameters at default value, using xgb.cv function get best n_rounds. Now, build a model with these parameters and check the accuracy.
-  
-  3.Otherwise, you can perform a grid search on rest of the parameters (max_depth, gamma, subsample, colsample_bytree etc) by fixing eta and nrounds. Note: If using gbtree, don't introduce gamma until you see a significant difference in your train and test error.
-  
-  4.Using the best parameters from grid search, tune the regularization parameters(alpha,lambda) if required.
-   
-  5.At last, increase/decrease eta and follow the procedure. But remember, excessively lower eta values would allow the model to learn deep interactions in the data and in this process, it might capture noise. So be careful!
-```{r}
-source("../lib/train_XGB.R") 
-source("../lib/cross_validation_XGB.R")
+```{r loadlib}
+source("../lib/train_XGS.R") 
 ```
 
-```{r}
-run.cv.XGB<-TRUE
-hyper_grid_XGB<- expand.grid(
- max_depth= c(1,3,5)
-                   )
-sample.reweight=TRUE
-dim(hyper_grid_XGB)
+#### Model selection with cross-validation
+* Do model selection by choosing among different values of training model parameters.
 
-if(run.cv.XGB){
-  res_cv_XGB <- matrix(0, nrow = nrow(hyper_grid_XGB), ncol = 4)
-  for(i in 1:nrow(hyper_grid_XGB)){
+```{r runcv}
+source("../lib/cross_validation_XGS.R")
+
+if(run.cv.XGS){
+  res_cv_XGS <- matrix(0, nrow = nrow(hyper_grid_XGS), ncol = 4)
+  for(i in 1:nrow(hyper_grid_XGS)){
     print(i)
-    l<-list( max_depth= hyper_grid_XGB$max_depth[i],
-      min_child_weight=1.5,
-                   subsample= 0.8, 
-                   colsample_bytree= 0.9,
-                   eta=0.1,
-                   gamma=0.1)
-    res_cv_XGB[i,] <- cv.function_XGB(data = dat_train,
-                                      K,
-                                      l,
-                                      reweight=sample.reweight
-                             )
-  save(res_cv_XGB, file="../output/res_cv_XGB.RData")
-  }
-}else{
-  load("../output/res_cv_XGB.RData")
+    res_cv_XGS[i,] <- cv.function_XGS(data=dat_train,
+                                      K, 
+                              l = list( 
+      max_depth= hyper_grid_XGS$max_depth[i] ))
+      
+  save(res_cv_XGS, file="../output/res_cv_XGS.RData")}
+ }else{
+  load("../output/res_cv_XGS.RData")
 }
 ```
-  
-
-
-
 
 Visualize cross-validation results. 
-```{r cv_vis_XGB}
-res_cv_XGB <- as.data.frame(res_cv_XGB) 
-colnames(res_cv_XGB) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
-XGB_cv_results = data.frame(hyper_grid_XGB, res_cv_XGB)
-XGB_cv_results[order(XGB_cv_results$mean_error), ]
-XGB_cv_results[order(XGB_cv_results$mean_AUC), ]
-```
-
- 
-#please refer main_GBM.Rmd to structure this Rmd file
-```{r test_XGB}
-
-```
-
-```{r eval_XGB}
-
-```
-
-```{r running_time_XGB}
-
-```
-
-
-
-
-
-### if you fit the model that can beat up the baseline, please have a look at this. 
-```{r XGBtune_step1}
-#preparing matrix 
-feature_train = as.matrix(dat_train[, -6007])
-label_train = as.integer(dat_train$label)-1 
-#imbalanced data, needs smaller scale_pos_weight
-sumwpos<-sum(label_train==1)
-sumwneg<-sum(label_train==0)
-dtrain<-xgb.DMatrix(feature_train,label=label_train)
-run.cv_XGS.Step1<-FALSE
-if(run.cv_XGS.Step1){
-params <- list(booster = "gbtree", objective = "binary:logistic", eta=0.1, gamma=0, max_depth=5, min_child_weight=1, subsample=0.8, colsample_bytree=0.8,scale_pos_weight=sumwneg/sumwpos)
-xgbcv <- xgb.cv( params = params, data = dtrain, nrounds = 100, nfold = 5, showsd = T, stratified = T, print_every_n = 1, early_stop_round = 20, maximize = F,eval_metric="auc",eval_metric="error")
-result<-xgbcv$evaluation_log
-which.min(xgbcv$evaluation_log$test_error_mean)#iter=90
-which.max(xgbcv$evaluation_log$test_auc_mean)#iter=99
-#start from
- save(xgbcv, file="../output/res_cv_XGS.Step1.RData")
-}else{
-  load("../output/res_cv_XGS.Step1.RData")}
-
-result_table<-rbind(result[which.min(result$test_error_mean),c("iter","test_error_mean","test_error_std","test_auc_mean","test_auc_std")],
-result[which.max(result$test_auc_mean),c("iter","test_error_mean","test_error_std","test_auc_mean","test_auc_std")])
-library(ggplot2)
-#best iter 
-ggplot(data=xgbcv$evaluation_log[1:200,])+
-  geom_line(aes(x=iter,y=test_error_mean),col="blue")+
-  geom_line(aes(x=iter,y=train_error_mean),col="red")
+```{r cv_vis}
   
-#preprocessing the matrix for the test 
-feature_test<-as.matrix(dat_test[,-6007])
-label_test<- as.integer(dat_test$label)-1
-dtest<-xgb.DMatrix(feature_test,label=label_test)
+res_cv_XGS <- as.data.frame(res_cv_XGS) 
+colnames(res_cv_XGS) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
+result_cv_XGS<- cbind(hyper_grid_XGS,res_cv_XGS)
 
+if(run.cv.XGS){
+  p1 <- result_cv_XGS %>%
+    ggplot(aes(x = as.factor(max_depth), y = mean_error,
+               ymin = mean_error - sd_error, ymax = mean_error + sd_error)) +
+    geom_crossbar() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
-#first model trainig using
-run.default.model=TRUE 
-if(run.default.model){
-xgb1<-xgb.train(params=params,
-                data=dtrain,
-                nrounds=100,
-                watchlist=list(val=dtest,train=dtrain),
-                print_every_n=10,
-                early_stop_round=10,
-                eval_metric="auc")
+  p2 <- result_cv_XGS %>%
+    ggplot(aes(x = as.factor(max_depth), y = mean_AUC,
+               ymin = mean_AUC - sd_AUC, ymax = mean_AUC + sd_AUC)) +
+    geom_crossbar() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
-#model prediction
-xgbpred.prob<- predict(xgb1,dtest)
-xgbpred.label<- ifelse(xgbpred.prob>0.5,1,0)
-levels(factor(xgbpred))
-levels(factor(label_test))
-library(caret)
-confM<-confusionMatrix(factor(xgbpred.label),factor(label_test))
-#accuracy 0.8433 
-#balanced accuracy 0.6886
-auc<-roc(factor(label_test),xgbpred.prob)$auc
-#auc:0.8489(high)
-#  view variable importance plot 
-mat<- xgb.importance(feature_names=colnames(feature_train),model=xgb1)
-xgb.plot.importance(importance_matrix = mat[1:20])
-save(confM,auc,mat,file="../output/res_cv_XGS.toy.RData")
-}else{
-  load("../output/res_cv_XGS.toy.RData")
-}
-
-```
-
-
-```{r XGBtune_Step2}
-#try to find the max depth and min child weight 
-#source("../lib/cross_validation_XGS.R")
-hyper_grid_XGB_1<- expand.grid(max_depth=seq(1,6,by=1),
-                              min_child_weight=seq(1,6,by=2),
-                              subsample=0.8, 
-                              colsample_bytree=0.8
-                               )
-parallelStartSocket(cpus = detectCores())
-dim(hyper_grid_XGB_1)
-feature_train = as.matrix(dat_train[, -6007])
-label_train = as.integer(dat_train$label) 
-run.cv.XGS1=FALSE
-if(run.cv.XGS1){
-  res_cv_XGS1 <- matrix(0, nrow = nrow(hyper_grid_XGB_1), ncol = 4)
-  for(i in 1:nrow(hyper_grid_XGB_1)){
-    l<-list(max_depth=hyper_grid_XGB_1$max_depth[i],
-            min_child_weight=hyper_grid_XGB_1$min_child_weight[i],
-            subsample=hyper_grid_XGB_1$subsample[i],
-            colsample_bytree=hyper_grid_XGB_1$colsample_bytree[i])
-    xgbcv<-xgb.cv( params = l,
-          data = dtrain, 
-          nrounds = 160, 
-          nfold = K, 
-          gamma=0,
-          showsd = T, 
-          stratified = T, 
-          early_stop_round = 10,
-          print_every_n=80,
-          eval_metric="auc",
-          eval_metric="error",
-          booster = "gbtree",
-          objective = "binary:logistic", 
-          scale_pos_weight=sumwneg/sumwpos,#because the data is imbalanced 
-          eta=0.3
-          )
-    result<-xgbcv$evaluation_log
-    cv.error<-result$test_error_mean
-    cv.AUC<-result$test_auc_mean
-    res_cv_XGS1[i,1]<-mean(cv.error)
-    res_cv_XGS1[i,2]<-sd(cv.error)
-    res_cv_XGS1[i,3]<-mean(cv.AUC)
-    res_cv_XGS1[i,4]<-sd(cv.AUC)
-  save(res_cv_XGS1, file="../output/res_cv_XGS1.RData")
-  }
-}else{
-  load("../output/res_cv_XGS1.RData")
-}
-#do some visualization 
-colnames(res_cv_XGS1)<-c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
-result1<-cbind(hyper_grid_XGB_1[,1:2],res_cv_XGS1)
-# use the output, pick the best max_depth, and min_child_weight using auc
-#maybe try to set min_children_weight to 0.5,1,1.5, and max_depth to 8,9,10
-hyper_grid_XGB_2<- expand.grid(max_depth=c(8,9,10),
-                              min_child_weight=c(0.5,1,1.5),
-                              subsample=0.8, 
-                              colsample_bytree=0.8
-                               )
-
-dim(hyper_grid_XGB_2)
-
-run.cv.XGS2=FALSE
-if(run.cv.XGS2){
-  res_cv_XGS2 <- matrix(0, nrow = nrow(hyper_grid_XGB_2), ncol = 4)
-  for(i in 1:nrow(hyper_grid_XGB_2)){
-    l<-list(max_depth=hyper_grid_XGB_2$max_depth[i],
-            min_child_weight=hyper_grid_XGB_2$min_child_weight[i],
-            subsample=hyper_grid_XGB_2$subsample[i],
-            colsample_bytree=hyper_grid_XGB_2$colsample_bytree[i])
-    xgbcv<-xgb.cv( params = l,
-          data = dtrain, 
-          nrounds = 160, 
-          nfold = K, 
-          gamma=0,
-          showsd = T, 
-          stratified = T, 
-          early_stop_round = 10,
-          print_every_n=80,
-          eval_metric="auc",
-          eval_metric="error",
-          booster = "gbtree",
-          objective = "binary:logistic", 
-          scale_pos_weight=sumwneg/sumwpos,
-          eta=0.3
-          )
-    result<-xgbcv$evaluation_log
-    cv.error<-result$test_error_mean
-    cv.AUC<-result$test_auc_mean
-    res_cv_XGS2[i,1]<-mean(cv.error)
-    res_cv_XGS2[i,2]<-sd(cv.error)
-    res_cv_XGS2[i,3]<-mean(cv.AUC)
-    res_cv_XGS2[i,4]<-sd(cv.AUC)
-  save(res_cv_XGS2, file="../output/res_cv_XGS2.RData")
-  }
-}else{
-  load("../output/res_cv_XGS2.RData")
-}
-
-colnames(res_cv_XGS2)<-c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
-result2<-cbind(hyper_grid_XGB_2[,1:2],res_cv_XGS2)
-# use the output, pick the best max_depth, and min_child_weight using auc
-# the best max_depth is 10, the min_child_weight is 1.5 with max mean auc 0.8080424
-
-par_best_max_depth <- 10; par_best_min_child_weight <- 1.5
-```
-
-
-
-```{r XGBtune_step3 }
-#tune subsample and colsample (mostly between 0.6-0.9)
-#try to find the max subsample and min colsample
-
-hyper_grid_XGB_3<- expand.grid(max_depth= par_best_max_depth,
-                              min_child_weight=par_best_min_child_weight,
-                              subsample= seq(0.6, 0.9, by=0.1), 
-                              colsample_bytree= seq(0.6, 0.9, by=0.1)
-                               )
-parallelStartSocket(cpus = detectCores())
-dim(hyper_grid_XGB_3)
-
-run.cv.XGS3=FALSE
-if(run.cv.XGS3){
-  res_cv_XGS3 <- matrix(0, nrow = nrow(hyper_grid_XGB_3), ncol = 4)
-  for(i in 1:nrow(hyper_grid_XGB_3)){
-    l<-list(max_depth=hyper_grid_XGB_3$max_depth[i],
-            min_child_weight=hyper_grid_XGB_3$min_child_weight[i],
-            subsample=hyper_grid_XGB_3$subsample[i],
-            colsample_bytree=hyper_grid_XGB_3$colsample_bytree[i])
-    xgbcv<-xgb.cv( params = l,
-          data = dtrain, 
-          nrounds = 160, 
-          nfold = K, 
-          gamma=0,
-          showsd = T, 
-          stratified = T, 
-          early_stop_round = 10,
-          print_every_n=80,
-          eval_metric="auc",
-          eval_metric="error",
-          booster = "gbtree",
-          objective = "binary:logistic", 
-          scale_pos_weight=sumwneg/sumwpos,#because the data is imbalanced 
-          eta=0.3
-          )
-    result<-xgbcv$evaluation_log
-    cv.error<-result$test_error_mean
-    cv.AUC<-result$test_auc_mean
-    res_cv_XGS3[i,1]<-mean(cv.error)
-    res_cv_XGS3[i,2]<-sd(cv.error)
-    res_cv_XGS3[i,3]<-mean(cv.AUC)
-    res_cv_XGS3[i,4]<-sd(cv.AUC)
-  save(res_cv_XGS3, file="../output/res_cv_XGS3.RData")
-  }
-}else{
-  load("../output/res_cv_XGS3.RData")
-}
-colnames(res_cv_XGS3)<-c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
-result3<-cbind(hyper_grid_XGB_3[,3:4],res_cv_XGS3)
-# use the output, pick the best subsample, and colsample_bytree, if it is out of the boundary, so some extra work 
-par_best_subsample<- 0.9
-par_best_colsample<- 0.8
-```
-
-
-
-```{r XGBtune_step4}
-#tune gamma
-hyper_grid_XGB_4<- c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
-
-run.cv.XGS4=FALSE
-if(run.cv.XGS4){
-  res_cv_XGS4 <- matrix(0, nrow = length(hyper_grid_XGB_4), ncol = 4)
-  for(i in 1:length(hyper_grid_XGB_4)){
-    l<-list(max_depth= par_best_max_depth,
-            min_child_weight=par_best_min_child_weight,
-            subsample= par_best_subsample, 
-            colsample_bytree= par_best_colsample)
-    xgbcv<-xgb.cv( params = l,
-          data = dtrain, 
-          nrounds = 160, 
-          nfold = K, 
-          gamma=hyper_grid_XGB_4[i],
-          showsd = T, 
-          stratified = T, 
-          early_stop_round = 10,
-          print_every_n=80,
-          eval_metric="auc",
-          eval_metric="error",
-          booster = "gbtree",
-          objective = "binary:logistic", 
-          scale_pos_weight=sumwneg/sumwpos,#because the data is imbalanced 
-          eta=0.3
-          )
-    result<-xgbcv$evaluation_log
-    cv.error<-result$test_error_mean
-    cv.AUC<-result$test_auc_mean
-    res_cv_XGS4[i,1]<-mean(cv.error)
-    res_cv_XGS4[i,2]<-sd(cv.error)
-    res_cv_XGS4[i,3]<-mean(cv.AUC)
-    res_cv_XGS4[i,4]<-sd(cv.AUC)
-  save(res_cv_XGS4, file="../output/res_cv_XGS4.RData")
-  }
-}else{
-  load("../output/res_cv_XGS4.RData")
-}
-colnames(res_cv_XGS4)<-c("mean_error", "sd_error", "mean_AUC", "sd_AUC");
-names(hyper_grid_XGB_4) <- c(1, 2, 3, 4, 5, 6, 7)
-result4<-cbind(hyper_grid_XGB_4,res_cv_XGS4)
-colnames(result4) <- c("gamma", colnames(res_cv_XGS4))
-# use the output, pick the best gamma value in terms of mean AUC, if it is out of the boundary, so some extra work 
-par_best_gamma<- 0.1
-
-#do some viusalization, pick the best one 
-```
-
-```{r XGBtune_step5}
-#tune the learning rate, decrease it 
-#typically, it lies between 0.01 to 0.3
-hyper_grid_XGB_5<- c(0.01, 0.06, 0.11, 0.16, 0.21, 0.27, 0.3)
-
-run.cv.XGS5=FALSE
-if(run.cv.XGS5){
-  res_cv_XGS5 <- matrix(0, nrow = length(hyper_grid_XGB_5), ncol = 4)
-  for(i in 1:length(hyper_grid_XGB_5)){
-    l<-list(max_depth= par_best_max_depth,
-            min_child_weight=par_best_min_child_weight,
-            subsample= par_best_subsample, 
-            colsample_bytree= par_best_colsample)
-    xgbcv<-xgb.cv( params = l,
-          data = dtrain, 
-          nrounds = 160, 
-          nfold = K, 
-          gamma=par_best_gamma,
-          showsd = T, 
-          stratified = T, 
-          early_stop_round = 10,
-          print_every_n=80,
-          eval_metric="auc",
-          eval_metric="error",
-          booster = "gbtree",
-          objective = "binary:logistic", 
-          scale_pos_weight=sumwneg/sumwpos,#because the data is imbalanced 
-          eta=hyper_grid_XGB_5[i]
-          )
-    result<-xgbcv$evaluation_log
-    cv.error<-result$test_error_mean
-    cv.AUC<-result$test_auc_mean
-    res_cv_XGS5[i,1]<-mean(cv.error)
-    res_cv_XGS5[i,2]<-sd(cv.error)
-    res_cv_XGS5[i,3]<-mean(cv.AUC)
-    res_cv_XGS5[i,4]<-sd(cv.AUC)
-  save(res_cv_XGS5, file="../output/res_cv_XGS5.RData")
-  }
-}else{
-  load("../output/res_cv_XGS5.RData")
-}
-colnames(res_cv_XGS5)<-c("mean_error", "sd_error", "mean_AUC", "sd_AUC");
-names(hyper_grid_XGB_5) <- c(1, 2, 3, 4, 5, 6, 7)
-result5<-cbind(hyper_grid_XGB_5,res_cv_XGS5)
-colnames(result5) <- c("eta", colnames(res_cv_XGS5))
-# using the output, the best learning rate in terms of AUC is 0.11 and the second best learning rate is 0.16 
-
-
-# select learning rate = c(0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15) to decide the best learning rate
-
-hyper_grid_XGB_6<- c(0.08, 0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15)
-
-run.cv.XGS6=FALSE
-if(run.cv.XGS6){
-  res_cv_XGS6 <- matrix(0, nrow = length(hyper_grid_XGB_6), ncol = 4)
-  for(i in 1:length(hyper_grid_XGB_6)){
-    l<-list(max_depth= par_best_max_depth,
-            min_child_weight=par_best_min_child_weight,
-            subsample= par_best_subsample, 
-            colsample_bytree= par_best_colsample)
-    xgbcv<-xgb.cv( params = l,
-          data = dtrain, 
-          nrounds = 160, 
-          nfold = K, 
-          gamma=par_best_gamma,
-          showsd = T, 
-          stratified = T, 
-          early_stop_round = 10,
-          print_every_n=80,
-          eval_metric="auc",
-          eval_metric="error",
-          booster = "gbtree",
-          objective = "binary:logistic", 
-          scale_pos_weight=sumwneg/sumwpos,#because the data is imbalanced 
-          eta=hyper_grid_XGB_6[i]
-          )
-    result<-xgbcv$evaluation_log
-    cv.error<-result$test_error_mean
-    cv.AUC<-result$test_auc_mean
-    res_cv_XGS6[i,1]<-mean(cv.error)
-    res_cv_XGS6[i,2]<-sd(cv.error)
-    res_cv_XGS6[i,3]<-mean(cv.AUC)
-    res_cv_XGS6[i,4]<-sd(cv.AUC)
-  save(res_cv_XGS6, file="../output/res_cv_XGS6.RData")
-  }
-}else{
-  load("../output/res_cv_XGS6.RData")
-}
-colnames(res_cv_XGS6)<-c("mean_error", "sd_error", "mean_AUC", "sd_AUC");
-names(hyper_grid_XGB_6) <- c(1, 2, 3, 4, 5, 6, 7, 8)
-result6<-cbind(hyper_grid_XGB_6,res_cv_XGS6)
-colnames(result6) <- c("eta", colnames(res_cv_XGS6))
-
-# use the output, pick the best gamma value in terms of mean AUC, if it is out of the boundary, so some extra work 
-par_best_eta<- 0.10
-
-#if still not performs well, do the regularization parameter tunning
-```
-
-
-```{r train_model_XGBW}
- 
-best_params = list(max_depth= par_best_max_depth, #10
-                   min_child_weight=par_best_min_child_weight,#1.5
-                   subsample= par_best_subsample, #0.9
-                   colsample_bytree= par_best_colsample, #0.8
-                   eta=par_best_eta, #0.10
-                   gamma=par_best_gamma) #0.1
-feature_train = as.matrix(dat_train[, -6007])
-label_train = as.integer(dat_train$label)-1
-dtrain<-xgb.DMatrix(feature_train,label=label_train)
-sumwpos<-sum(label_train==1)
-sumwneg<-sum(label_train==0)
-train.XGB_W<-FALSE
-if(train.XGB_W){
-tm_train_XGB_W <- system.time(
-   fit_train_XGB_W <- xgb.train(params=best_params,
-                data=dtrain,
-                nrounds=100,
-                eval_metric="auc",
-                 booster = "gbtree",
-          objective = "binary:logistic", 
-          scale_pos_weight=sumwneg/sumwpos))
-save(fit_train_XGB_W, file="../output/fit_train_XGB_W.RData")}else{
-  load(file="../output/fit_train_XGB_W.RData")
-}
-```
-
-```{r test_XGB_W}
-tm_test = NA
-feature_test <- as.matrix(dat_test[, -6007])
-test.XGB_W<-FALSE
-if(test.XGB_W){
-  load(file="../output/fit_train_XGB_W.RData")
-  tm_test.XGB_W <- system.time({prob_pred <- predict(fit_train_XGB_W, feature_test);
-                          label_pred<- ifelse(prob_pred>.5,1,0)})
+  print(p1)
+  print(p2)
 }
 
 
 ```
 
-```{r eva_XGB_W}
-label_test <- as.integer(dat_test$label)-1
-weight_test <- rep(NA, length(label_test))
-for (v in unique(label_test)){
-  weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
-}
-confusionMatrix(as.factor(label_pred), as.factor(label_test))
-accu <- sum(weight_test * (label_pred == label_test)) / sum(weight_test)
-tpr.fpr <- WeightedROC(prob_pred, label_test, weight_test)
-auc <- WeightedAUC(tpr.fpr)
-cat("The accuracy of XGboost with weight model", "is", accu*100, "%.\n")
-cat("The AUC of  XGboost with weight model", "is", auc, ".\n")
 
+* Choose the "best" parameter value
+```{r best_model}
+depth_best <- hyper_grid_XGS$max_depth[which.max(res_cv_XGS$mean_AUC)]
 ```
 
-
-### Summarize Running Time
-Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
-```{r running_time_XGBW}
-cat("Time for constructing training features=", tm_feature_train[1], "s \n")
-cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
-cat("Time for training Weighted xgboost=", tm_train_XGB_W[1], "s \n") 
-cat("Time for testing Weighted xgboost=", tm_test.XGB_W[1], "s \n")
-```
-
-Please orgranize this a little bit 
-```{r train XGB_S}
-#run 5 folder cv on the best parameter setting SMOTE 
-source("../lib/cross_validation_XGS.R")
-source("../lib/train_XGS.R")
-run.cv.XGB_S<- TRUE
-####
-if(run.cv.XGB_S){
-  res_cv_XGB_S<-matrix(0, nrow = 1, ncol = 4)
-  res_cv_XGB_S<-cv.function(
-    data=dat_train,
-            K=5, 
-            l=best_params,
-            p=0.5) #p: the classification threshold
-  
-  save(res_cv_XGB_S, file="../output/res_cv_XGB_S.RData")
-}else{
-  load(file="../output/res_cv_XGB_S.RData")
-}
-
+* Train the model with the entire training set using the selected model (model parameter) via cross-validation.
+```{r final_train}
 #preparing 
 parallelStartSocket(cpus = detectCores())
 #SMOTE the training set
-SMOTE_data=FALSE
-if(SMOTE_data){
 data_train.SMOTE<- SMOTE(label~.,dat_train)
 table(data_train.SMOTE$label)
 feature_train.S<-as.matrix(data_train.SMOTE[,-6007])
 label_train.S<-as.integer(data_train.SMOTE$label)-1
 table(label_train.S)
-dtrain_S<-xgb.DMatrix(feature_train.S,label=label_train.S)
-save(dtrain_S,file="../output/dtrain_S.RData")}else{
-  load(file="../output/dtrain_S.RData")
+fit.train.XGS<-TRUE
+if(fit.train.XGS){
+tm_train_XGS<- system.time(
+  fit_train_XGS<- train_XGS(l=list(max_depth=depth_best),
+                feature=feature_train.S,
+                label= label_train.S))
+save(fit_train_XGS,file="../output/fit_train_XGS.RData")
+}else{
+  load(file="../output/fit_train_XGS.RData")
 }
 
-#train the XGBoost+SMOTE 
-train.XGB_S<-FALSE
-if(train.XGB_S){
-tm_train_XGB_<- system.time(
-  train_XGB_S<- xgb.train(params=best_params,
-                data=dtrain_S,
-                nrounds=160,
-                eval_metric="error",
-                eval_metric="auc",
-                 booster = "gbtree",
-          objective = "binary:logistic"))
-save( train_XGB_S, file="../output/train_XGB_S.RData")
-}else{
-  load(file="../output/train_XGB_S.RData")
+```
+
+### Step 5: Run test on test images
+```{r test}
+tm_test_XGS = NA
+feature_test <- as.matrix(dat_test[, -6007])
+if(run.test.XGS){
+  load(file="../output/fit_train_XGS.RData")
+  tm_test_XGS <- system.time({prob_pred <- predict(fit_train_XGS, feature_test); 
+                          label_pred <- ifelse(prob_pred>0.5,1,0)})
 }
 ```
 
-
-
-```{r test XGB_S}
-test.XGB_S=FALSE
-if(test.XGB_S){
- load(file="../output/train_XGB_S.RData")
-tm_test_XGBS<-system.time(
-  {pro_pred<-predict(train_XGB_S,feature_test);
-label_pred<-ifelse(pro_pred>0.5,1,0)}
-)}
+* evaluation
+```{r}
+## reweight the test data to represent a balanced label distribution
 label_test <- as.integer(dat_test$label)-1
 weight_test <- rep(NA, length(label_test))
 for (v in unique(label_test)){
   weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
 }
+
 accu <- sum(weight_test * (label_pred == label_test)) / sum(weight_test)
 tpr.fpr <- WeightedROC(prob_pred, label_test, weight_test)
 auc <- WeightedAUC(tpr.fpr)
-cat("The accuracy of GBM+SMOTE model is", accu*100, "%.\n")
-cat("The AUC of GBM+SMOTE model is", auc, ".\n")
+
+
+cat("The accuracy of model:", "is", accu*100, "%.\n")
+cat("The AUC of model:", "is", auc, ".\n")
+
+
 ```
 
 ### Summarize Running Time
@@ -796,12 +305,15 @@ Prediction performance matters, so does the running times for constructing featu
 ```{r running_time}
 cat("Time for constructing training features=", tm_feature_train[1], "s \n")
 cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
-cat("Time for training GBM+SMOTE model=", tm_train_XGB_[1], "s \n") 
-cat("Time for testing GBM+SMOTE model=", tm_test_XGBS[1], "s \n")
+cat("Time for training model=", tm_train_XGS[1], "s \n") 
+cat("Time for testing model=", tm_test_XGS[1], "s \n")
 ```
-
-
-
 
 ###Reference
 - Du, S., Tao, Y., & Martinez, A. M. (2014). Compound facial expressions of emotion. Proceedings of the National Academy of Sciences, 111(15), E1454-E1462.
+
+
+
+
+
+
