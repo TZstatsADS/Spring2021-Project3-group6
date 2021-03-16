@@ -10,7 +10,7 @@ Term: Spring 2021
 
 + Team 6
 + Team members
-	+ Wei Wei Song
+	+ Weiwei Song
 	+ Changhao He
 	+ Aurore Gosmant
 	+ Zi Fang
