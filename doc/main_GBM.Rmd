@@ -117,18 +117,18 @@ Using cross-validation or independent test set evaluation, we compare the perfor
 ```{r model_setup}
 ##GBM 
 hyper_grid_GBM<- expand.grid(
-  shrinkage=c(0.1,0.15,0.2),
-  interaction.depth=c(1,3),
+  shrinkage=c(0.05, 0.1,.15),
+  interaction.depth=c(1,2),
   n.minobsinnode=c(10),
   bag.fraction=c(1),
-  n.trees=c(100,200,600,1000)
+  n.trees=c(60,100,200,400)
 )
 dim(hyper_grid_GBM)
 ```
 
 ### Step 2: import data and train-test split 
 ```{r}
-#train-test split
+#train-test split 
 info <- read.csv(train_label_path)
 n <- nrow(info)
 n_train <- round(n*(4/5), 0)
@@ -242,7 +242,7 @@ if(run.cv.GBM){
                               bag_f = hyper_grid_GBM$bag.fraction[i],
                               n_m = hyper_grid_GBM$n.minobsinnode[i],
                               reweight = TRUE)
-  save(res_cv, file="../output/res_cv_GBM.RData")
+  save(res_cv_GBM, file="../output/res_cv_GBM.RData")
   }
 }else{
   load("../output/res_cv_GBM.RData")
@@ -250,31 +250,23 @@ if(run.cv.GBM){
 
 ```
 
+
 Visualize cross-validation results. 
 ```{r cv_vis_GBM}
   
-res_cv_GBM <- as.data.frame(res_cv) 
+res_cv_GBM <- as.data.frame(res_cv_GBM) 
 colnames(res_cv_GBM) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
 GBM_cv_results = data.frame(hyper_grid_GBM, res_cv_GBM)
 GBM_cv_results[order(GBM_cv_results$mean_error), ]
 
 ```
 
-```{r}
-p1 = ggplot(
-  GBM_cv_results, aes(shrinkage, as.factor(n.trees), fill = mean_error)) +
-  geom_tile()+
-  labs(title="Mean Error Heatmap for gbm", y="ntrees", x="shrinkage")
-
-p1
-```
-
-
 * Choose the "best" parameter value
 ```{r best_model_GBM}
-par_best <- GBM_cv_results[which.min(GBM_cv_results$mean_error),]
-par_best <- par_best[1:5]
-par_best
+#Choose the hyper parameters which minimize cross validation error.
+par_best_GBM <- GBM_cv_results[which.min(GBM_cv_results$mean_error),]
+par_best_GBM <- par_best_GBM[1:5]
+par_best_GBM
 ```
 
 * Train the model with the entire training set using the selected model (model parameter) via cross-validation.
@@ -286,25 +278,25 @@ for (v in unique(label_train)){
 }
 if (sample.reweight){
   tm_train_GBM <- system.time(fit_train_GBM <- train_GBM(dat_train, w = weight_train, 
-                              num.trees = par_best$n.trees,
-                              depth = par_best$interaction.depth,
-                              rate = par_best$shrinkage,
-                              bag_f = par_best$bag.fraction,
-                              n_m = par_best$n.minobsinnode))
+                              num.trees = par_best_GBM$n.trees,
+                              depth = par_best_GBM$interaction.depth,
+                              rate = par_best_GBM$shrinkage,
+                              bag_f = par_best_GBM$bag.fraction,
+                              n_m = par_best_GBM$n.minobsinnode))
 } else {
   tm_train_GBM <- system.time(fit_train_GBM <- train_GBM(dat_train, label_train, w = NULL, 
-                                                      num.trees = par_best$n.trees,
-                              depth = par_best$interaction.depth,
-                              rate = par_best$shrinkage,
-                              bag_f = par_best$bag.fraction,
-                              n_m = par_best$n.minobsinnode))
+                                                      num.trees = par_best_GBM$n.trees,
+                              depth = par_best_GBM$interaction.depth,
+                              rate = par_best_GBM$shrinkage,
+                              bag_f = par_best_GBM$bag.fraction,
+                              n_m = par_best_GBM$n.minobsinnode))
 }
 save(fit_train_GBM, file="../output/fit_train_GBM.RData")
 ```
 
 ### Step 5: Run test on test images
 ```{r test_GBM}
-tm_test = NA
+tm_test_GBM = NA
 if(run.test.GBM){
   load(file="../output/fit_train_GBM.RData")
   tm_test_GBM <- system.time({prob_pred_GBM <- test_GBM(fit_train_GBM, dat_test)[[2]]; 
@@ -338,8 +330,8 @@ cat("The AUC of BGM  model:", "is", auc_GBM, ".\n")
 ### Summarize Running Time
 Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
 ```{r running_time_GBM}
-cat("Time for constructing training features=", tm_feature_train[1], "s \n")
-cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
+#cat("Time for constructing training features=", tm_feature_train[1], "s \n")
+#cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
 cat("Time for training model=", tm_train_GBM[1], "s \n") 
 cat("Time for testing model=", tm_test_GBM[1], "s \n")
 ```
