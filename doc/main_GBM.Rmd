@@ -284,7 +284,7 @@ if (sample.reweight){
                               bag_f = par_best_GBM$bag.fraction,
                               n_m = par_best_GBM$n.minobsinnode))
 } else {
-  tm_train_GBM <- system.time(fit_train_GBM <- train_GBM(dat_train, label_train, w = NULL, 
+  tm_train_GBM <- system.time(fit_train_GBM <- train_GBM(dat_train, w = NULL, 
                                                       num.trees = par_best_GBM$n.trees,
                               depth = par_best_GBM$interaction.depth,
                               rate = par_best_GBM$shrinkage,
