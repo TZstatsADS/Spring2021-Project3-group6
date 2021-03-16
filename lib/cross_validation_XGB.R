@@ -6,7 +6,7 @@
 ### Project 3
 
 
-cv.function<- function(data, K,l,p=0.5){
+cv.function_XGB<- function(data, K,l,p=0.5,reweight = FALSE){
   ### Input:
   ### - features: feature data frame
   ### - labels: label data vector
@@ -30,18 +30,24 @@ cv.function<- function(data, K,l,p=0.5){
     feature_test<- as.matrix(dat_test[,-6007])
     feature_train<- as.matrix(dat_train[,-6007])
     label_train<- as.integer(dat_train$label)-1
+
     
-  
     ## sample reweighting
- 
+    weight_train <- rep(NA, length(label_train))
     weight_test <- rep(NA, length(label_test))
-    for (v in unique(data$label))
-    {
+    for (v in unique(label_train)){
+      weight_train[label_train == v] = 0.5 * length(label_train) / length(label_train[label_train == v])
       weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
     }
     
-    model_train <- train(feature_train,label_train,l) #l is the parameter test 
-   
+    ## model training
+    if (reweight){
+      model_train <- train_XGB(feature_train, lab_train,l,w = weight_train)
+    } else {
+      model_train <- train_XGB(feature_train, lab_train, l, w = NULL)
+    }
+    
+  
     ## make predictions
     prob_pred<-  predict(model_train, feature_test)
     label_pred <- ifelse(prob_pred>p,1,0)
