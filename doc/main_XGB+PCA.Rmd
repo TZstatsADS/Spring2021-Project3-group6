@@ -158,7 +158,7 @@ if(run.feature.test){
 }
 ```
 ```{r}
-load("output/feature_train.RData")
+load("../output/feature_train.RData")
 ```
 
 #### Exploratory Analysis on features
@@ -249,9 +249,9 @@ Call the train model and test model from library.
 * Do model selection by choosing among different values of training model parameters.
 
 ```{r runcv warning=FALSE}
-source("../lib/train.R") 
-source("../lib/test.R")
-source("../lib/cross_validation.R")
+source("../lib/train_XGB+PCA.R") 
+source("../lib/test_XGB+PCA.R")
+source("../lib/cross_validation_XGB+PCA.R")
 #feature_train = as.matrix(dat_train[, -6007])
 #label_train = as.integer(dat_train$label) 
 labels.train = as.matrix(info[train_idx,]$label)
@@ -333,7 +333,7 @@ feature_test<-as.data.frame(predict(pca, newdata=dat_test)[,c(1:50)])
 
 ```{r}
 if(run.test){
-  load(file="output/fit_train.RData")
+  load(file="../output/fit_train.RData")
   tm_test <- system.time({label_pred <- ifelse(test.boost(fit_train, as.matrix(feature_test), pred.type = 'response')>0.5,1,0); 
   prob_pred <- test.boost(fit_train, as.matrix(feature_test), pred.type = 'response')})
 }
