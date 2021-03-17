@@ -265,10 +265,10 @@ if(run.cv){
   for(i in 1:length(depth)){
     cat("Depth = ", depth[i], "\n")
     res_cv[i,] <- cv.function.xgboost(pca_train,labels.train, K=10, depth = depth[i], reweight = sample.reweight)
-  save(res_cv, file="../output/res_cv.RData")
+  save(res_cv, file="../output/res_cv_XGB+PCA.RData")
   }
 }else{
-  load("../output/res_cv.RData")
+  load("../output/res_cv_XGB+PCA.RData")
 }
 ```
 
@@ -316,7 +316,7 @@ if (sample.reweight){
 } else {
   tm_train <- system.time(fit_train <- train.xgboost(pca_train, label_train, w = NULL, depth_=4))
 }
-save(fit_train, file="../output/fit_train.RData")
+save(fit_train, file="../output/fit_train_XGB+PCA.RData")
 ```
 
 ### Step 5: Run test on test images
@@ -333,7 +333,7 @@ feature_test<-as.data.frame(predict(pca, newdata=dat_test)[,c(1:50)])
 
 ```{r}
 if(run.test){
-  load(file="../output/fit_train.RData")
+  load(file="../output/fit_train_XGB+PCA.RData")
   tm_test <- system.time({label_pred <- ifelse(test.boost(fit_train, as.matrix(feature_test), pred.type = 'response')>0.5,1,0); 
   prob_pred <- test.boost(fit_train, as.matrix(feature_test), pred.type = 'response')})
 }
