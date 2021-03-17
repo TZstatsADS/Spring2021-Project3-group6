@@ -90,12 +90,12 @@ In this chunk, we have a set of controls for the evaluation experiments.
 
 ```{r exp_setup}
 K <- 5  # number of CV folds
-run.feature.train <- FALSE # process features for training set
-run.feature.test <- FALSE # process features for test set
+run.feature.train <- TRUE # process features for training set
+run.feature.test <- TRUE # process features for test set
 
 run.cv.knn<-FALSE #run cross-validation on the training set applying knn mod
-run.train.knn<-TRUE 
-run.test.knn<-TRUE
+run.train.knn<-TRUE #training the data with the best k value
+run.test.knn<-TRUE # process features for test set
 ```
 
 Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications. In this Starter Code, we tune parameter lambda (the amount of shrinkage) for logistic regression with LASSO penalty.
@@ -207,7 +207,7 @@ label_train = as.integer(dat_train$label)
 #length(dat_train$label); length(label_train)
 
 
-
+# run cross-validation to tune the parameter value k
 if(run.cv.knn){
   res_cv_knn <- matrix(0, nrow = length(k), ncol = 4)
   for(i in 1:length(k)){
@@ -221,8 +221,8 @@ if(run.cv.knn){
 ```
 
 Visualize cross-validation results. 
-```{r cv_vis}
-  
+```{r}
+# visualize results  
 res_cv_knn <- as.data.frame(res_cv_knn) 
 colnames(res_cv_knn) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
 res_cv_knn$k = as.factor(k)
@@ -250,7 +250,8 @@ if(run.cv.knn){
 
 * Choose the "best" parameter value
 ```{r best_model}
-par_best <- k[which.min(res_cv_knn$mean_error)]
+par_best_k <- k[which.min(res_cv_knn$mean_error)]
+
 ```
 
 
@@ -260,18 +261,15 @@ par_best <- k[which.min(res_cv_knn$mean_error)]
 tm_test = NA
 feature_test <- as.matrix(dat_test[, -6007])
 if(run.test.knn){
-  #load(file="../output/fit_train.RData")
-  #tm_test <- system.time({label_pred <- as.integer(test(fit_train, feature_test, pred.type = 'class')); 
-  #                        prob_pred <- test(fit_train, feature_test, pred.type = 'response')})
   tm_test_knn <- system.time({label_pred <- as.integer(train.knn(feature_train, feature_test, 
-                                                                 label_train, k = par_best))})
+                                                                 label_train, k = par_best_k))})
 }
 ```
 
 
 * evaluation
 ```{r}
-
+# find the corresponding evaluation values
 label_test <- as.integer(dat_test$label)
 accu <- mean(label_test == label_pred)
 tpr.fpr <- WeightedROC(as.numeric(label_pred), label_test)
@@ -289,8 +287,6 @@ Prediction performance matters, so does the running times for constructing featu
 ```{r running_time}
 cat("Time for constructing training features=", tm_feature_train[1], "s \n")
 cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
-#cat("Time for training model=", tm_train[1], "s \n") 
-#cat("Time for testing model=", tm_test[1], "s \n")
 cat("Time for training & testing model=", tm_test_knn[1], "s \n") 
 ```
 
