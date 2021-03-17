@@ -30,7 +30,7 @@ Aurore Gosmant is responsible for exploring through the data and the features ge
 
 Zi Fang implemented and tuned the Linear Discriminant Analysis and KNN algorithms, and generate the associated .Rmd and .R scripts corresponding. 
 
-Chang Hao is responsible for implementing and running the baseline model, as well as implementing and tuning the Support Vector Machine algorithm. He also ran the best model on the test data given in class.
+Changhao He is responsible for implementing and running the baseline model, tuning hyper parameters. He wrote the R files about the baseline model and finalized the main.Rmd. He also ran the best model on the test data given in class.
 
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
