@@ -116,7 +116,7 @@ run.cv.WRF<-FALSE
 run.train.WRF<-TRUE 
 run.test.WRF<-TRUE
 
-run.cv.BRF<-TRUE
+run.cv.BRF<-FALSE
 run.train.BRF<-TRUE
 run.test.BRF<-TRUE
 ```
@@ -268,7 +268,7 @@ grid.arrange(p1,p2,nrow=2)
 
 * Choose the "best" parameter value
 ```{r best_model_BRF}
-par_best_BRF <-hyper_grid_RF[which.max(result_cv_BRF$mean_AUC),]
+par_best_BRF <-hyper_grid_RF[which.min(result_cv_BRF$mean_error),]
 par_best_ntree<- par_best_BRF$ntree
 par_best_mtry<- par_best_BRF$mtry
 ```
