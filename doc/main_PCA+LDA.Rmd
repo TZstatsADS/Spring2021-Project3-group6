@@ -202,6 +202,7 @@ s[63:68]
 
 ```{r}
 # run pca and extract the first 65 principle components
+train_start = proc.time()
 pca_start = proc.time()
 if(run.pca65){
   pca <- prcomp(feature_train, scale=T, rank.=65)
@@ -213,7 +214,6 @@ pca_end = proc.time()
 label_train = as.integer(dat_train$label)
 
 # run train using LDA based on the PCA result
-train_start = proc.time()
 if(run.train.lda){
   lda_M <- lda(label_train~., data=as.data.frame(pca$x))
   save(lda_M, file="../output/fit_train_lda.RData")
