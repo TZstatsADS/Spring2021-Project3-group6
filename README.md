@@ -24,7 +24,7 @@ and the midpoint of the upper lip(52).  For example, the distance of an happy fa
 	
 **Contribution statement**: ([default](doc/a_note_on_contributions.md)) 
 
-Weiwei Song: implement the XGBoost, XGBoost+SMOTE,  and Random Forest algorithms, and write the related .Rmd and R script files.  preparing the presentation slices
+Weiwei Song: implement the XGBoost, XGBoost+SMOTE,  and Random Forest algorithms, and write the related .Rmd and R script files.  prepare the PPT for the presentation
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
 
