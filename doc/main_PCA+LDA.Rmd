@@ -94,6 +94,8 @@ K <- 5  # number of CV folds
 run.feature.train <- TRUE # process features for training set
 run.test <- TRUE # run evaluation on an independent test set
 run.feature.test <- TRUE # process features for test set
+run.pca65 <- TRUE # run pca and extract the first 65 principle components
+run.train.lda <- TRUE # run lda train
 ```
 
 
@@ -199,9 +201,8 @@ s[63:68]
 ```
 
 ```{r}
+# run pca and extract the first 65 principle components
 pca_start = proc.time()
-run.pca65 <- TRUE
-run.train.lda <- TRUE
 if(run.pca65){
   pca <- prcomp(feature_train, scale=T, rank.=65)
   save(pca, file="../output/pca65_result.RData")
@@ -210,6 +211,8 @@ if(run.pca65){
 pca_end = proc.time()
 
 label_train = as.integer(dat_train$label)
+
+# run train using LDA based on the PCA result
 train_start = proc.time()
 if(run.train.lda){
   lda_M <- lda(label_train~., data=as.data.frame(pca$x))
@@ -217,17 +220,15 @@ if(run.train.lda){
 }else{
   load("../output/fit_train_lda.RData")}
 train_end = proc.time()
+
 new_train <- predict(lda_M, as.data.frame(pca$x))
-
-
-
-
 feature_test <- as.matrix(dat_test[, -6007])
 label_test <- as.integer(dat_test$label)
 feature_test_scale <- scale(feature_test, scale=F)
 feature_test_new <- feature_test_scale %*% pca$rotation
 feature_test_new <- as.data.frame(feature_test_new)
 
+# run lda on the test set
 test_start = proc.time()
 new_test <- predict(lda_M, feature_test_new)
 
