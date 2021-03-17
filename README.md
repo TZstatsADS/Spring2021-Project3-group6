@@ -26,6 +26,9 @@ and the midpoint of the upper lip(52).  For example, the distance of an happy fa
 
 Weiwei Song: implement the XGBoost, XGBoost+SMOTE,  and Random Forest algorithms, and write the related .Rmd and R script files.  prepare the PPT for the presentation
 
+Zi Fang: Github Leader; work on exploratory data analysis, share PCA results and other findings with other members, and use PCA+LDA, KNN and XGBoost modules to make predictions.
+
+
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
 
 ```
