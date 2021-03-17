@@ -2,4 +2,4 @@
 
 ### Doc folder
 
-The doc directory contains the report or presentation files. It can have subfolders.  
+The doc directory contains all the different main files used to extract features from the data sets, implement, train cross validate and test the models. 
