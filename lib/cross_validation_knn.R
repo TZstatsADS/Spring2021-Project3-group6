@@ -27,7 +27,7 @@ cv.function.knn <- function(features, labels, K, k){
     
     ## make predictions
     label_pred <- train.knn(feature_train, feature_test, label_train, k)
-    cv.error[i] <- mean(label_pred == label_test)
+    cv.error[i] <- mean(label_pred != label_test)
     tpr.fpr <- WeightedROC(as.numeric(label_pred), label_test)
     cv.AUC[i] <- WeightedAUC(tpr.fpr)
   }
